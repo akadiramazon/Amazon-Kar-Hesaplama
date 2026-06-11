@@ -84,19 +84,26 @@ try:
             start_date, end_date = selected_dates
             df_amazon_all = df_amazon_all[(df_amazon_all['Clean_Date'] >= pd.to_datetime(start_date)) & (df_amazon_all['Clean_Date'] <= pd.to_datetime(end_date))]
 
-    # 🎯 1. ÖZELLİK: OTO ASIN / SKU BAZLI NOKTA ATIŞI EŞLEŞTİRME MOTORU
+    # 🎯 1. ÖZELLİK: GELİŞMİŞ OTO ASIN AYIKLAMA VE EŞLEŞTİRME MOTORU
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
-    # Amazon raporunda ASIN sütunu kontrolü (Rapor türüne göre değişebilir)
     amazon_asin_col = 'ASIN' if 'ASIN' in df_amazon_all.columns else ([c for c in df_amazon_all.columns if 'ASIN' in c.upper() or 'SKU' in c.upper()] + [None])[0]
 
     for name in unique_amazon_names:
         search_name = str(name).strip()
         matched_row = None
         
-        # Eğer Amazon raporunda ASIN hücresi doluysa direkt maliyet listesindeki ASIN ile çakıştır
-        if amazon_asin_col and asin_col:
+        # 🌟 HİLE ADIMI: Amazon metninin içinden regex ile B0... kodunu otomatik cımbızla çek
+        asin_match = re.search(r'(B[0-9A-Z]{9})', search_name.upper())
+        if asin_match and asin_col:
+            extracted_asin = asin_match.group(1)
+            master_match = df_master[df_master['ASIN_clean'] == extracted_asin]
+            if not master_match.empty:
+                matched_row = master_match.iloc[0]
+        
+        # Ayrı sütun kontrolü (B Planı)
+        if matched_row is None and amazon_asin_col and asin_col:
             sample_row = df_amazon_all[df_amazon_all['Ürün Detayları'] == name]
             if not sample_row.empty:
                 amz_asin = str(sample_row.iloc[0][amazon_asin_col]).strip().upper()
@@ -104,7 +111,7 @@ try:
                 if not master_match.empty:
                     matched_row = master_match.iloc[0]
 
-        # ASIN bulunamadıysa akıllı metin algoritmasına dön (B Planı)
+        # Metin tabanlı eşleştirme (C Planı)
         if matched_row is None:
             clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.startswith(clean_search, na=False)]
@@ -228,15 +235,12 @@ try:
             st.info("🎉 Maşallah kanka! İncelediğin bu tarih aralığında hiç iade almamışsın.")
 
     with sekme4:
-        st.subheader("💤 3. ÖZELLİK: Ölü Stok (Slow-Moving) Radarı")
+        st.subheader("💤 Ölü Stok (Slow-Moving) Radarı")
         st.markdown("Maliyet listenizde olup, yüklediğiniz Amazon raporlarındaki tarih aralığında **sıfır (0) çeken**, yani hiç satmayan ürünler aşağıda listelenmiştir. Bu ürünler depoda bekleyerek maliyet yaratıyor olabilir kanka!")
         
-        # Satış listesindeki tüm eşleşen ürün isimlerini bir kümede topla
         satilan_urunler = set(df_valid_actions['Gercek_Urun_Adi'].dropna().unique())
-        
-        # Master listede olup satılanlar kümesinde olmayanları bul
         olu_stoklar = df_master[~df_master['ÜRÜN ADI_clean'].isin(satilan_urunler)][['ÜRÜN ADI_clean', 'Guncel_Stok_num', 'KDV_li_Maliyet_num']]
-        olu_stoklar = olu_stoklar[olu_stoklar['Guncel_Stok_num'] > 0] # Stoğu olmayanları ölü sayma
+        olu_stoklar = olu_stoklar[olu_stoklar['Guncel_Stok_num'] > 0]
         
         if not olu_stoklar.empty:
             olu_stoklar['Depodaki Toplam Bağlı Para (TL)'] = olu_stoklar['Guncel_Stok_num'] * olu_stoklar['KDV_li_Maliyet_num']
