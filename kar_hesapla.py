@@ -53,10 +53,9 @@ try:
     if asin_col:
         df_master['ASIN_clean'] = df_master[asin_col].astype(str).str.strip().str.upper()
 
-    # 🌟 3. ADIM: EĞER CANLI STOK (.TXT) DOSYASI YÜKLENDİYSE EXCELDEKİ STOKLARI EZ VE GÜNCELLE
+    # 🌟 EĞER CANLI STOK (.TXT) DOSYASI YÜKLENDİYSE EXCELDEKİ STOKLARI GÜNCELLE
     live_stock_dict = {}
     if live_stock_file is not None:
-        # Hatalı kısım düzeltildi: on_bad_lines='skip' kullanıldı ve encoding esnetildi
         try:
             df_live_stock = pd.read_csv(live_stock_file, sep='\t', on_bad_lines='skip', encoding='utf-8')
         except:
@@ -64,7 +63,6 @@ try:
             
         df_live_stock.columns = df_live_stock.columns.str.strip()
         
-        # Amazon stok sütun isimlerini yakala
         amz_asin_key = 'asin' if 'asin' in df_live_stock.columns else ([c for c in df_live_stock.columns if 'ASIN' in c.upper() or 'SKU' in c.upper()] + [None])[0]
         amz_qty_key = 'afn-fulfillable-quantity' if 'afn-fulfillable-quantity' in df_live_stock.columns else ('quantity' if 'quantity' in df_live_stock.columns else [c for c in df_live_stock.columns if 'QTY' in c.upper() or 'QUANTITY' in c.upper() or 'STOK' in c.upper() or 'MİKTAR' in c.upper()][0])
         
@@ -75,7 +73,6 @@ try:
                 except: q_val = 0.0
                 live_stock_dict[a_code] = q_val
             
-            # Master Excel'deki stok miktarını canlı verilerle güncelle kanka
             if asin_col:
                 df_master['Guncel_Stok_num'] = df_master['ASIN_clean'].map(lambda x: live_stock_dict.get(x, 0.0))
 
@@ -255,16 +252,22 @@ try:
             st.warning("⚠️ Şu an sadece Excel'deki tahmini stok verilerini kullanıyorum. Gerçek zamanlı analiz için sol menüden Amazon .txt envanter raporunu yükle kanka!")
             
         satilan_urunler = set(df_valid_actions['Gercek_Urun_Adi'].dropna().unique())
-        olu_stoklar = df_master[~df_master['ÜRÜN ADI_clean'].isin(satilan_urunler)][['ÜRÜN ADI_clean', 'Guncel_Stok_num', 'KDV_li_Maliyet_num']]
+        
+        # 🌟 GÜNCELLEME: ASIN SÜTUNUNU DA TABLOYA GETİRİYORUZ
+        olu_stoklar = df_master[~df_master['ÜRÜN ADI_clean'].isin(satilan_urunler)][['ASIN_clean', 'ÜRÜN ADI_clean', 'Guncel_Stok_num', 'KDV_li_Maliyet_num']]
         olu_stoklar = olu_stoklar[olu_stoklar['Guncel_Stok_num'] > 0]
         
         if not olu_stoklar.empty:
             olu_stoklar['Depoda Bağlı Kalan Sermaye (TL)'] = olu_stoklar['Guncel_Stok_num'] * olu_stoklar['KDV_li_Maliyet_num']
             olu_stoklar = olu_stoklar.rename(columns={
+                'ASIN_clean': 'ASIN Kodu',
                 'ÜRÜN ADI_clean': 'Hiç Satmayan Ölü Ürün Adı',
                 'Guncel_Stok_num': 'Amazon Deposundaki Canlı Stok',
                 'KDV_li_Maliyet_num': 'Birim Ürün Maliyeti (TL)'
             }).sort_values(by='Depoda Bağlı Kalan Sermaye (TL)', ascending=False)
+            
+            # Sütun sırasını göze şık gelecek şekilde ayarla (Önce ASIN gelsin)
+            olu_stoklar = olu_stoklar[['ASIN Kodu', 'Hiç Satmayan Ölü Ürün Adı', 'Amazon Deposundaki Canlı Stok', 'Birim Ürün Maliyeti (TL)', 'Depoda Bağlı Kalan Sermaye (TL)']]
             
             st.dataframe(olu_stoklar, use_container_width=True)
         else:
