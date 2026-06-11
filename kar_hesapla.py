@@ -1,5 +1,13 @@
 import streamlit as st
 import pandas as pd
+... (diğer importlar)
+
+st.title("🎯 Amazon CEO Finansal Analiz & Gerçek Zamanlı Envanter Paneli")
+
+# 🌟 BUTONU TAM BURAYA YAPIŞTIR
+if maliyet_file is not None and live_stock_file is not None:
+    # ... (o verdiğim buton kodu)import streamlit as st
+import pandas as pd
 import re
 import plotly.express as px
 from datetime import datetime
