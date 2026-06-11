@@ -15,7 +15,7 @@ st.sidebar.header("📦 Veri Yükleme Merkezi")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgesini Seçin (.csv)", type=["csv"], key="maliyet")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
 
-# 🚀 YENİ EKLEMELİ CANLI STOK KUTUSU (.txt desteği)
+# 🚀 CANLI STOK KUTUSU (.txt desteği)
 live_stock_file = st.sidebar.file_uploader("3️⃣ Canlı Amazon Stok Raporunu Seçin (.txt)", type=["txt"], key="live_stock")
 
 # TEMEL DOSYALAR YOKSA KILAVUZ GÖSTERİR VE DURUR
@@ -56,11 +56,15 @@ try:
     # 🌟 3. ADIM: EĞER CANLI STOK (.TXT) DOSYASI YÜKLENDİYSE EXCELDEKİ STOKLARI EZ VE GÜNCELLE
     live_stock_dict = {}
     if live_stock_file is not None:
-        # Amazon .txt raporları sekmeyle (\t) ayrılır
-        df_live_stock = pd.read_csv(live_stock_file, sep='\t', encoding='utf-8', errors='ignore')
+        # Hatalı kısım düzeltildi: on_bad_lines='skip' kullanıldı ve encoding esnetildi
+        try:
+            df_live_stock = pd.read_csv(live_stock_file, sep='\t', on_bad_lines='skip', encoding='utf-8')
+        except:
+            df_live_stock = pd.read_csv(live_stock_file, sep='\t', on_bad_lines='skip', encoding='latin1')
+            
         df_live_stock.columns = df_live_stock.columns.str.strip()
         
-        # Amazon stok sütun isimlerini yakala (afn-fulfillable-quantity veya quantity vs.)
+        # Amazon stok sütun isimlerini yakala
         amz_asin_key = 'asin' if 'asin' in df_live_stock.columns else ([c for c in df_live_stock.columns if 'ASIN' in c.upper() or 'SKU' in c.upper()] + [None])[0]
         amz_qty_key = 'afn-fulfillable-quantity' if 'afn-fulfillable-quantity' in df_live_stock.columns else ('quantity' if 'quantity' in df_live_stock.columns else [c for c in df_live_stock.columns if 'QTY' in c.upper() or 'QUANTITY' in c.upper() or 'STOK' in c.upper() or 'MİKTAR' in c.upper()][0])
         
@@ -180,11 +184,10 @@ try:
     product_summary[['Satış Adedi', 'İade Adedi', 'İade Oranı (%)']] = product_summary.apply(get_detailed_qtys, axis=1)
     product_summary['Net Satış Adedi'] = product_summary['Satış Adedi'] - product_summary['İade Adedi']
 
-    # 🌟 CANLI STOK VARSA DOĞRUDAN CANLI RAPORDU VERİYİ GÖSTER, YOKSA ESKİ TAHMİNİ YAP
     def get_kalan_stok(r):
         base_stok = df_valid_actions[df_valid_actions['Ürün Detayları'] == r['Ürün Detayları']]['Giris_Stok'].iloc[0]
         if live_stock_file is not None:
-            return base_stok # Zaten canlı veriyi en başta master'a çaktık
+            return base_stok
         return max(0, base_stok - r['Net Satış Adedi'])
 
     product_summary['Mevcut Canlı Stok'] = product_summary.apply(get_kalan_stok, axis=1)
