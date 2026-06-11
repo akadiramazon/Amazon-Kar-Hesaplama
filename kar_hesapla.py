@@ -7,7 +7,7 @@ from datetime import datetime
 # 🌟 SAYFA AYARLARI VE GENİŞ EKRAN
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
-st.title("🎯 Amazon CEO Finansal Analiz & Lojistik Koruma Paneli")
+st.title("🎯 Amazon CEO Finansal Analiz & Ölü Stok Radarı")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI
@@ -31,10 +31,8 @@ try:
     # Sütun isimlerini temizle
     df_master.columns = df_master.columns.str.strip()
     
-    # 🚨 ASIN/SKU VE LOJİSTİK SÜTUN KONTROLLERİ
+    # 🚨 ASIN/SKU SÜTUN KONTROLÜ
     asin_col = 'ASIN' if 'ASIN' in df_master.columns else ('SKU' if 'SKU' in df_master.columns else None)
-    desi_col = 'Gerçek Desi' if 'Gerçek Desi' in df_master.columns else ('Desi' if 'Desi' in df_master.columns else None)
-    kg_col = 'Gerçek Ağırlık (kg)' if 'Gerçek Ağırlık (kg)' in df_master.columns else ('Ağırlık' if 'Ağırlık' in df_master.columns else None)
 
     df_master = df_master.dropna(subset=['ÜRÜN ADI', 'KDV li Maaliyet'])
     df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
@@ -54,10 +52,6 @@ try:
 
     if asin_col:
         df_master['ASIN_clean'] = df_master[asin_col].astype(str).str.strip().str.upper()
-    if desi_col:
-        df_master['Gercek_Desi_num'] = df_master[desi_col].apply(clean_num)
-    if kg_col:
-        df_master['Gercek_Kg_num'] = df_master[kg_col].apply(clean_num)
 
     # 2. Amazon Dosyalarını Birleştir
     amazon_df_listesi = []
@@ -90,18 +84,18 @@ try:
             start_date, end_date = selected_dates
             df_amazon_all = df_amazon_all[(df_amazon_all['Clean_Date'] >= pd.to_datetime(start_date)) & (df_amazon_all['Clean_Date'] <= pd.to_datetime(end_date))]
 
-    # 🎯 1. ÖZELLİK: ASIN / SKU BAZLI NOKTA ATIŞI EŞLEŞTİRME MOTORU
+    # 🎯 1. ÖZELLİK: OTO ASIN / SKU BAZLI NOKTA ATIŞI EŞLEŞTİRME MOTORU
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
-    # Amazon raporunda ASIN sütunu kontrolü (Rapor türüne göre 'asin' veya 'sku' sütunu)
+    # Amazon raporunda ASIN sütunu kontrolü (Rapor türüne göre değişebilir)
     amazon_asin_col = 'ASIN' if 'ASIN' in df_amazon_all.columns else ([c for c in df_amazon_all.columns if 'ASIN' in c.upper() or 'SKU' in c.upper()] + [None])[0]
 
     for name in unique_amazon_names:
         search_name = str(name).strip()
         matched_row = None
         
-        # Eğer Amazon raporunda satır bazlı ASIN bulabiliyorsak önce onu dene
+        # Eğer Amazon raporunda ASIN hücresi doluysa direkt maliyet listesindeki ASIN ile çakıştır
         if amazon_asin_col and asin_col:
             sample_row = df_amazon_all[df_amazon_all['Ürün Detayları'] == name]
             if not sample_row.empty:
@@ -110,7 +104,7 @@ try:
                 if not master_match.empty:
                     matched_row = master_match.iloc[0]
 
-        # ASIN eşleşmesi yoksa akıllı metin algoritmasına dön (B Planı)
+        # ASIN bulunamadıysa akıllı metin algoritmasına dön (B Planı)
         if matched_row is None:
             clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.startswith(clean_search, na=False)]
@@ -120,7 +114,6 @@ try:
             if not matches.empty:
                 matched_row = matches.iloc[0]
             else:
-                # Anahtar kelime skoru
                 keywords = [w for w in re.split(r'\W+', clean_search.lower()) if len(w) > 2]
                 best_score = 0
                 for idx, row in df_master.iterrows():
@@ -135,22 +128,17 @@ try:
         # Sözlüğü doldur
         if matched_row is not None:
             mapping[name] = {
-                'Master_Name': matched_row['ÜRÜN ADI_clean'], 
-                'Maliyet': matched_row['KDV_li_Maliyet_num'],
-                'Tekli_Satis': matched_row['Gercek_Satis_Fiyati_num'], 
-                'Mevcut_Stok': matched_row['Guncel_Stok_num'],
-                'G_Desi': matched_row.get('Gercek_Desi_num', 0.0),
-                'G_Kg': matched_row.get('Gercek_Kg_num', 0.0)
+                'Master_Name': matched_row['ÜRÜN ADI_clean'], 'Maliyet': matched_row['KDV_li_Maliyet_num'],
+                'Tekli_Satis': matched_row['Gercek_Satis_Fiyati_num'], 'Mevcut_Stok': matched_row['Guncel_Stok_num']
             }
         else:
-            mapping[name] = {'Master_Name': "MALIYET LISTESINDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0, 'Mevcut_Stok': 0.0, 'G_Desi': 0.0, 'G_Kg': 0.0}
+            mapping[name] = {'Master_Name': "MALIYET LISTESINDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0, 'Mevcut_Stok': 0.0}
 
     df_valid_actions = df_amazon_all[df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi'])].copy()
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
     df_valid_actions['Tekli_Satis_Fiyati'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Tekli_Satis'])
     df_valid_actions['Giris_Stok'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Mevcut_Stok'])
-    df_valid_actions['Sizin_Desi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['G_Desi'])
 
     def detect_quantity(row):
         if row['Tekli_Satis_Fiyati'] > 0 and abs(row['Toplam ürün fiyatları']) > 0:
@@ -197,11 +185,11 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # 🚨 STOK ALARMI KONTROLÜ
+    # STOK ALARMI KONTROLÜ
     kritik_stoklar = product_summary[product_summary['Kalan Stok'] <= 5][['Sizin Listedeki Tam Adı', 'Kalan Stok']].drop_duplicates()
 
     # 📑 SEKMELİ SAYFA TASARIMI (4 SEKME)
-    sekme1, sekme2, sekme3, sekme4 = st.tabs(["💰 Ana Finans Paneli", "🚨 Stok Alarmları", "📉 İade Analizi", "⚖️ Kargo & Desi Radarı"])
+    sekme1, sekme2, sekme3, sekme4 = st.tabs(["💰 Ana Finans Paneli", "🚨 Kritik Stok Alarmları", "📉 İade Analiz Merkezi", "💤 Ölü Stok Radarı"])
 
     with sekme1:
         st.subheader("📊 Dönemsel Performans Özetiniz")
@@ -240,19 +228,28 @@ try:
             st.info("🎉 Maşallah kanka! İncelediğin bu tarih aralığında hiç iade almamışsın.")
 
     with sekme4:
-        st.subheader("⚖️ 3. ÖZELLİK: Amazon Kargo & Lojistik Desi Radarı")
-        st.markdown("This system compares your actual product configuration against the fees assessed to catch billing discrepancies.")
+        st.subheader("💤 3. ÖZELLİK: Ölü Stok (Slow-Moving) Radarı")
+        st.markdown("Maliyet listenizde olup, yüklediğiniz Amazon raporlarındaki tarih aralığında **sıfır (0) çeken**, yani hiç satmayan ürünler aşağıda listelenmiştir. Bu ürünler depoda bekleyerek maliyet yaratıyor olabilir kanka!")
         
-        # Amazon lojistik kesintilerini tara (Kargo / FBA ücretleri içeren satırlar)
-        kargo_gider_sutunlari = [c for c in df_amazon_all.columns if 'kargo' in c.lower() or 'fba' in c.lower() or 'lojistik' in c.lower() or 'oran' in c.lower()]
+        # Satış listesindeki tüm eşleşen ürün isimlerini bir kümede topla
+        satilan_urunler = set(df_valid_actions['Gercek_Urun_Adi'].dropna().unique())
         
-        # Örnek lojistik rapor uyuşmazlığı taraması
-        if 'Sipariş No.' in df_valid_actions.columns and 'Ağırlık/Desi (Amazon)' in df_amazon_all.columns:
-            # Amazon'un tarttığı ile senin bildirdiğin uyuşmazlıkları çek
-            discrepancy_df = df_valid_actions[df_valid_actions['Sizin_Desi'] > 0].copy()
-            st.dataframe(discrepancy_df[['Sipariş No.', 'Gercek_Urun_Adi', 'Sizin_Desi']], use_container_width=True)
+        # Master listede olup satılanlar kümesinde olmayanları bul
+        olu_stoklar = df_master[~df_master['ÜRÜN ADI_clean'].isin(satilan_urunler)][['ÜRÜN ADI_clean', 'Guncel_Stok_num', 'KDV_li_Maliyet_num']]
+        olu_stoklar = olu_stoklar[olu_stoklar['Guncel_Stok_num'] > 0] # Stoğu olmayanları ölü sayma
+        
+        if not olu_stoklar.empty:
+            olu_stoklar['Depodaki Toplam Bağlı Para (TL)'] = olu_stoklar['Guncel_Stok_num'] * olu_stoklar['KDV_li_Maliyet_num']
+            olu_stoklar = olu_stoklar.rename(columns={
+                'ÜRÜN ADI_clean': 'Hiç Satmayan Ölü Ürün Adı',
+                'Guncel_Stok_num': 'Depodaki Stok Miktarı',
+                'KDV_li_Maliyet_num': 'Birim Ürün Maliyeti (TL)'
+            }).sort_values(by='Depodaki Toplam Bağlı Para (TL)', ascending=False)
+            
+            st.warning(f"🚨 Dikkat kanka! Seçtiğin tarih aralığında depoda bekleyen ama **hiç satmayan** toplam {len(olu_stoklar)} farklı ürün yakalandı.")
+            st.dataframe(olu_stoklar, use_container_width=True)
         else:
-            st.info("💡 Kargo koruma radarının çalışması için maliyet listenize **'ASIN'** ve **'Gerçek Desi'** sütunlarını eklemeniz yeterlidir kanka! Sistem o zaman Amazon faturalarını didik didik tarar.")
+            st.success("🎉 Muazzam kanka! Maliyet listendeki her ürün bu dönemde en az 1 adet satmış, ölü stoğun yok!")
 
 except Exception as e:
     st.error(f"🚨 Sistem Hatası: {e}")
