@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO Kusursuz Finansal Analiz Paneli")
-st.markdown("🧠 **Yapay Zekâ Tabanlı Varyasyon ve İsim Eşleştirme Motoru (AI Fuzzy Match) Aktif.** Sapmalar engellenmiştir kanka!")
+st.markdown("🧠 **Yapay Zekâ Tabanlı Eşleştirme & Envanter Tazminat Takip Motoru Aktif.** Sapmalar engellenmiştir kanka!")
 st.markdown("---")
 
 # 📊 GLOBAL PARA VE SAYISAL TEMİZLEME MOTORU
@@ -20,7 +20,7 @@ def clean_maliyet_num(val):
     try: return float(val_str)
     except: return 0.0
 
-# 📦 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
+# 📦 VERI YÜKLEME MERKEZİ (SOL MENÜ)
 st.sidebar.header("📦 Veri Yükleme Merkezi")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgesini Seçin (.csv)", type=["csv"], key="maliyet")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
@@ -78,7 +78,7 @@ try:
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
-    # 🧠 YAPAY ZEKÂ DESTEKLİ METİN VE KELİME ANALİZ FONKSİYONLARI
+    # 🧠 YAPAY ZEKÂ DESTEKLİ METİN ANALİZ FONKSİYONLARI
     def clean_text_for_ai(text):
         return str(text).lower().replace('...', '').replace('-', ' ').replace(',', ' ').replace('/', ' ').strip()
 
@@ -86,19 +86,21 @@ try:
         if not set1 or not set2: return 0.0
         return float(len(set1.intersection(set2))) / float(len(set1.union(set2)))
 
-    # 🎯 4. PLAN: YAPAY ZEKÂ TABANLI AKILLI EŞLEŞTİRME DÖNGÜSÜ
+    # YAPAY ZEKÂ TABANLI AKILLI EŞLEŞTİRME DÖNGÜSÜ
     for name in unique_amazon_names:
         search_name = str(name).strip()
+        
+        # ⭐ YENİ GÜVENLİK KALKANI: Eğer işlem bir Amazon Envanter İadesi / Tazminatı ise doğrudan bağla kanka
+        if "ENVANTER ÜCRET İADESİ" in clean_text_for_ai(search_name) or "REIMBURSEMENT" in clean_text_for_ai(search_name):
+            mapping[name] = {'Master_Name': "AMAZON LOJİSTİK ENVANTER TAZMİNATI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0}
+            continue
+
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
         
-        # 1. Aşama: Birebir Tam Metin Kilidi
         matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower() == search_name.lower()]
-        
-        # 2. Aşama: Başlangıç Köprü Kilidi
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.startswith(clean_search.lower(), na=False)]
             
-        # 3. Aşama: Yapay Zekâ Benzerlik ve Karakter Ağırlıklı Uzaklık Algoritması (AI Fuzzy Match)
         if matches.empty:
             amz_words = set(clean_text_for_ai(clean_search).split())
             best_ai_score = -1.0
@@ -106,16 +108,12 @@ try:
             
             for _, row in df_master.iterrows():
                 master_words = set(clean_text_for_ai(row['ÜRÜN ADI_clean']).split())
-                
-                # Kelime bazlı Jaccard Benzerlik Skoru hesapla
                 word_similarity = calculate_jaccard_distance(amz_words, master_words)
                 
                 if word_similarity > 0:
-                    # Karakter uzunluğu ve yapısal benzerlik ağırlığı ekle (Sapmayı önler kanka)
                     len_ratio = min(len(clean_search), len(row['ÜRÜN ADI_clean'])) / max(len(clean_search), len(row['ÜRÜN ADI_clean']))
                     ai_score = (word_similarity * 0.7) + (len_ratio * 0.3)
                     
-                    # Eğer ürün adı doğrudan Amazon isminin ön ekiyle başlıyorsa yapay zekâya ödül skoru ver
                     if clean_text_for_ai(row['ÜRÜN ADI_clean']).startswith(clean_text_for_ai(clean_search)[:15]):
                         ai_score += 0.2
                     
@@ -123,7 +121,6 @@ try:
                         best_ai_score = ai_score
                         best_ai_row = row
             
-            # Yapay zekâ güven eşiği (En azından mantıklı bir yakınlık bulduysa bağla kanka)
             if best_ai_row is not None and best_ai_score > 0.15:
                 mapping[name] = {
                     'Master_Name': best_ai_row['ÜRÜN ADI_clean'], 
@@ -132,7 +129,6 @@ try:
                 }
                 continue
 
-        # Eğer 1. veya 2. aşamada pürüzsüz bulunduysa
         if not matches.empty:
             if len(matches) > 1:
                 matches = matches.copy()
@@ -149,22 +145,32 @@ try:
         else:
             mapping[name] = {'Master_Name': "MALİYET LİSTESİNDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0}
 
-    # Finansal Hesaplamalar
-    df_valid_actions = df_amazon_all[df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi'])].copy()
+    # Finansal Hesaplamalar (Tazminatları da Kapsayacak Şekilde Genişletildi)
+    # Sipariş ödemesi, iadeler ve Amazon Tazminat tiplerinin hepsini içeri alıyoruz kanka!
+    valid_actions_mask = df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi', 'Envanter Ücret İadesi', 'FBA Inventory Reimbursement'])
+    df_valid_actions = df_amazon_all[valid_actions_mask].copy()
+    
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
     df_valid_actions['Tekli_Satis_Fiyati'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Tekli_Satis'])
 
     def detect_quantity(row):
+        if row['Gercek_Urun_Adi'] == "AMAZON LOJİSTİK ENVANTER TAZMİNATI": return 1
         if row['Tekli_Satis_Fiyati'] > 0 and abs(row['Toplam ürün fiyatları']) > 0:
             return max(1, round(abs(row['Toplam ürün fiyatları']) / row['Tekli_Satis_Fiyati']))
         return 1
 
     df_valid_actions['Adet'] = df_valid_actions.apply(detect_quantity, axis=1)
     
-    df_valid_actions['Toplam_Urun_Maliyeti'] = df_valid_actions.apply(
-        lambda row: (row['Birim_Maliyet'] * row['Adet']) if row['İşlem tipi'] == 'Sipariş Ödemesi' else -(row['Birim_Maliyet'] * row['Adet']), axis=1
-    )
+    # Yeni Maliyet Çarkı: Tazminatların maliyeti 0 TL düşer, para direkt kâra yazılır kanka
+    def calc_row_maliyet(row):
+        if row['Gercek_Urun_Adi'] == "AMAZON LOJİSTİK ENVANTER TAZMİNATI":
+            return 0.0
+        if row['İşlem tipi'] == 'Para İadesi':
+            return -(row['Birim_Maliyet'] * row['Adet'])
+        return row['Birim_Maliyet'] * row['Adet']
+
+    df_valid_actions['Toplam_Urun_Maliyeti'] = df_valid_actions.apply(calc_row_maliyet, axis=1)
     df_valid_actions['Net_Kar'] = df_valid_actions['Toplam (TRY)'] - df_valid_actions['Toplam_Urun_Maliyeti']
 
     # KÜMÜLATİF TABLO OLUŞTURMA
@@ -175,6 +181,8 @@ try:
     ).reset_index()
 
     def get_detailed_qtys(r):
+        if r['Gercek_Urun_Adi'] == "AMAZON LOJİSTİK ENVANTER TAZMİNATI":
+            return pd.Series([0, 0, 0.0])
         s_adet = df_valid_actions[(df_valid_actions['Ürün Detayları'] == r['Ürün Detayları']) & (df_valid_actions['İşlem tipi'] == 'Sipariş Ödemesi')]['Adet'].sum()
         i_adet = df_valid_actions[(df_valid_actions['Ürün Detayları'] == r['Ürün Detayları']) & (df_valid_actions['İşlem tipi'] == 'Para İadesi')]['Adet'].sum()
         return pd.Series([s_adet, i_adet, round((i_adet / s_adet * 100), 2) if s_adet > 0 else 0.0])
@@ -182,12 +190,12 @@ try:
     product_summary[['Satış Adedi', 'İade Adedi', 'İade Oranı (%)']] = product_summary.apply(get_detailed_qtys, axis=1)
     product_summary['Net Satış Adedi'] = product_summary['Satış Adedi'] - product_summary['İade Adedi']
 
-    # 📈 Dynamic ROI ve Kâr Marjı Enjeksiyonu
+    # ROI ve Kâr Marjı Sütunları
     product_summary['Kâr Marjı (%)'] = product_summary.apply(
         lambda r: round((r['Net_Temiz_Kar'] / r['Toplam_Net_Gelen'] * 100), 2) if r['Toplam_Net_Gelen'] > 0 else 0.0, axis=1
     )
     product_summary['ROI (%)'] = product_summary.apply(
-        lambda r: round((r['Net_Temiz_Kar'] / r['Toplam_Mal_Maliyeti'] * 100), 2) if r['Toplam_Mal_Maliyeti'] > 0 else 0.0, axis=1
+        lambda r: round((r['Net_Temiz_Kar'] / r['Toplam_Mal_Maliyeti'] * 100), 2) if r['Toplam_Mal_Maliyeti'] > 0 else 100.0, axis=1
     )
 
     product_summary = product_summary.sort_values(by='Net_Temiz_Kar', ascending=False)
@@ -202,7 +210,7 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # ⭐ SAF CSS TABLO RENKLENDİRME STYLERS (Hatasız ve Hızlı kanka)
+    # SAF CSS TABLO RENKLENDİRME STYLERS
     def hakedis_renklendir(val):
         return 'background-color: #e1f5fe; color: #0277bd;' if val > 0 else ''
 
@@ -213,7 +221,7 @@ try:
             return 'background-color: #ffebee; color: #c62828; font-weight: bold;'
         return ''
 
-    # 📑 SEKMELİ GÖSTERİM MERKEZİ (Senin Orijinal Yapın)
+    # 📑 SEKMELİ GÖSTERİM MERKEZİ
     sekme1, sekme2 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi"])
 
     with sekme1:
@@ -226,7 +234,7 @@ try:
         
         if final_net_kar >= 0:
             kpi4.metric("🔥 DÖNEM NET TEMİZ KÂR", f"{final_net_kar:,.2f} TL", delta="KÂRDAYIZ KANKA!")
-            st.success(f"🎉 Muazzam! Bu dönemi başarıyla temiz kârla kapattık.")
+            st.success(f"🎉 Muazzam! Amazon envanter tazminatları dahil dükkan bu dönemi harika bir kârla kapattı.")
         else:
             kpi4.metric("📉 DÖNEM NET ZARAR", f"{final_net_kar:,.2f} TL", delta="İÇERİDEYİZ!", delta_color="inverse")
             st.error(f"🚨 Giderler bu dönem hakediş miktarını aşmış durumda kanka.")
@@ -234,7 +242,6 @@ try:
         st.markdown("---")
         st.subheader("📋 Tüm Ürünlerin Kusursuz Analiz Tablosu")
         
-        # Saf CSS tabanlı ısı haritası tablosu
         try:
             styled_df = product_summary_show.style.map(kar_ve_roi_renklendir, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_renklendir, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
         except:
@@ -250,10 +257,10 @@ try:
             mime='text/csv',
         )
 
-        df_bulunamayanlar = product_summary_show[product_summary_show['Sizin Listede Eşleşen Adı'] == "MALİYET LİSTESİNDE BULUNAMADI"]
+        df_bulunamayanlar = product_summary_show[(product_summary_show['Sizin Listede Eşleşen Adı'] == "MALİYET LİSTESİNDE BULUNAMADI")]
         if not df_bulunamayanlar.empty:
             st.markdown("---")
-            st.warning("🚨 **Kanka Gözden Kaçanlar Var! Aşağıdaki ürünler maliyet çizelgende tam eşleşmediği için kâr haneleri sıfır kaldı:**")
+            st.warning("🚨 **Kanka Gözden Kaçanlar Var! Aşağıdaki ürünler maliyet çizelgende tam esleşmediği için kâr haneleri sıfır kaldı:**")
             st.dataframe(df_bulunamayanlar[['Amazon Raporundaki Ürün Adı', 'Net Hak Ediş (TRY)']], use_container_width=True)
 
     with sekme2:
