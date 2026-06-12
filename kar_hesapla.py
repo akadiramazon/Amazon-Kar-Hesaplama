@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 st.set_page_config(page_title="Amazon Finansal Analiz", layout="wide")
 
@@ -40,35 +41,43 @@ if not amazon_df_list:
 
 combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
-# 🧮 İLK GÜNKÜ ASIL MATEMATİK MOTORU
+# 🧮 SENİN GERÇEK RAPORUNA GÖRE AYARLANMIŞ MATEMATİK MOTORU
 total_revenue = 0.0
 total_amazon_fees = 0.0
 total_product_cost = 0.0
 
 # Sipariş satırları üzerinde dönüp kârı hesaplayalım
 for index, row in combined_amazon.iterrows():
-    amount_val = row.get('amount', row.get('Tutar', row.get('total', 0)))
+    # 🎯 SENİN RAPORUNDAKİ GERÇEK SÜTUN: 'toplam'
+    amount_val = row.get('toplam', row.get('amount', row.get('Tutar', 0)))
     try:
-        amount = float(str(amount_val).replace(',', '.'))
+        # Para formatındaki nokta ve virgülleri temizleyelim
+        amount_str = str(amount_val).replace('.', '').replace(',', '.')
+        amount_clean = re.sub(r'[^\d.-]', '', amount_str)
+        amount = float(amount_clean)
     except:
         amount = 0.0
         
-    type_str = str(row.get('type', row.get('Tür', row.get('event_type', '')))).lower()
-    sku_str = str(row.get('seller-sku', row.get('Stok Kodu', row.get('sku', '')))).strip().upper()
+    # 🎯 SENİN RAPORUNDAKİ GERÇEK SÜTUNLAR: 'Tür', 'Sku', 'Açıklama'
+    type_str = str(row.get('Tür', row.get('type', ''))).lower()
+    sku_str = str(row.get('Sku', row.get('seller-sku', ''))).strip().upper()
+    description_str = str(row.get('Açıklama', row.get('description', ''))).strip().upper()
     
-    # Sipariş ve Satışları yakalayan asıl filtre
+    # Sipariş ve Satışları yakalayan filtre
     if 'order' in type_str or 'satış' in type_str or 'sipariş' in type_str:
         if amount > 0:
             total_revenue += amount
             
-            # Ürünün bizim excel listesindeki maliyetini bul (SKU ile)
+            # Ürünün bizim excel listesindeki maliyetini bul (İlk sütun SKU)
             if df_mst is not None:
                 sku_col_mst = df_mst.columns[0]
                 maliyet_row = df_mst[df_mst[sku_col_mst].astype(str).str.strip().str.upper() == sku_str]
                 
                 if not maliyet_row.empty:
+                    # 3. sütun maliyet sütunudur
                     cost_col_mst = df_mst.columns[2] if len(df_mst.columns) > 2 else df_mst.columns[-1]
-                    val_cost = str(maliyet_row.iloc[0].get(cost_col_mst, 0)).replace(',', '.')
+                    val_cost = str(maliyet_row.iloc[0].get(cost_col_mst, 0)).replace('.', '').replace(',', '.')
+                    val_cost = re.sub(r'[^\d.]', '', val_cost)
                     try:
                         total_product_cost += float(val_cost)
                     except:
@@ -117,5 +126,5 @@ with col_grafik2:
     st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
-st.subheader("📋 Detaylı Ürün Takip Tablosu")
-st.dataframe(df_mst, use_container_width=True)
+st.subheader("📋 Yüklediğiniz Gerçek Rapor İzleme Tablosu")
+st.dataframe(combined_amazon, use_container_width=True)
