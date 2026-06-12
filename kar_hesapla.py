@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("ASIN/SKU İsim Tercümanı Kodun İçine Gömülmüştür. Maliyet ve Fiyatları Canlı Olarak ürünler.csv Dosyasından Okur.")
+st.markdown("Sistem maliyetleri, fiyatları ve kârı doğrudan yüklediğiniz iki dosya üzerinden canlı eşleştirir.")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -24,17 +24,21 @@ try:
         try: df_master = pd.read_csv(maliyet_file, encoding='utf-8-sig')
         except: df_master = pd.read_csv(maliyet_file, encoding='latin1')
 
-    # Sütun isimlerindeki gizli boşlukları temizle
-    df_master.columns = df_master.columns.str.strip()
+    # Sütun isimlerindeki gizli boşlukları ve alt satır karakterlerini (\\n) temizle
+    df_master.columns = df_master.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
     
-    # Sizin dosyaya özel sütun kontrolü ve temizliği
-    df_master = df_master.dropna(subset=['ÜRÜN ADI', 'KDV li Maaliyet'])
-    df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
+    # Sütun isimlerini sabitleyelim (KDV li Maaliyet veya KDV li Maliyet gibi hatalara karşı koruma)
+    urun_adi_col = [col for col in df_master.columns if 'ÜRÜN ADI' in col][0]
+    maliyet_col = [col for col in df_master.columns if 'KDV li' in col or 'KDV' in col][0]
+    satis_col = [col for col in df_master.columns if 'GERÇEK SATIŞ' in col or 'SATIŞ FİYATI' in col][0]
+
+    df_master = df_master.dropna(subset=[urun_adi_col, maliyet_col])
+    df_master['ÜRÜN ADI_clean'] = df_master[urun_adi_col].astype(str).str.strip()
 
     # Sayısal Dönüştürme Motoru (Maliyetlerdeki virgül/nokta krizini çözer)
     def clean_maliyet_num(val):
         if pd.isna(val): return 0.0
-        val_str = str(val).replace('TRY','').strip()
+        val_str = str(val).replace('TRY','').replace('TL','').strip()
         if ',' in val_str and '.' in val_str:
             val_str = val_str.replace('.', '').replace(',', '.')
         elif ',' in val_str:
@@ -42,9 +46,9 @@ try:
         try: return float(val_str)
         except: return 0.0
 
-    # Gerçek maliyetleri ve satış fiyatlarını sizin ana listenizden (ürünler.csv) canlı okuyoruz!
-    df_master['KDV_li_Maliyet_num'] = df_master['KDV li Maaliyet'].apply(clean_maliyet_num)
-    df_master['Gercek_Satis_Fiyati_num'] = df_master['GERÇEK SATIŞ FİYATI'].apply(clean_maliyet_num)
+    # Gerçek maliyetleri ve satış fiyatlarını senin ana listenizden (ürünler.csv) canlı okuyoruz!
+    df_master['KDV_li_Maliyet_num'] = df_master[maliyet_col].apply(clean_maliyet_num)
+    df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_maliyet_num)
 
     master_maliyet_dict = df_master.set_index('ÜRÜN ADI_clean')['KDV_li_Maliyet_num'].to_dict()
     master_satis_dict = df_master.set_index('ÜRÜN ADI_clean')['Gercek_Satis_Fiyati_num'].to_dict()
@@ -59,7 +63,7 @@ try:
         amazon_df_listesi.append(df_temp)
 
     df_amazon_all = pd.concat(amazon_df_listesi, ignore_index=True)
-    df_amazon_all.columns = df_amazon_all.columns.str.strip()
+    df_amazon_all.columns = df_amazon_all.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
 
     # Mükerrer sipariş koruması
     if 'Sipariş No.' in df_amazon_all.columns:
@@ -68,7 +72,7 @@ try:
     df_amazon_all['Toplam (TRY)'] = pd.to_numeric(df_amazon_all['Toplam (TRY)'], errors='coerce').fillna(0.0)
     df_amazon_all['Toplam ürün fiyatları'] = pd.to_numeric(df_amazon_all['Toplam ürün fiyatları'], errors='coerce').fillna(0.0)
 
-    # 🎯 ARKA PLANDAKİ ENTEGRE İSİM TERCÜMANI VE CANLI HİBRİT EŞLEŞTİRME MOTORU
+    # 🎯 ARKA PLANDAKİ CANLI HİBRİT EŞLEŞTİRME MOTORU
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
@@ -90,7 +94,7 @@ try:
         if not matches.empty:
             matched_row = matches.iloc[0]
             m_name = matched_row['ÜRÜN ADI_clean']
-            # Tercüme bitti! Şimdi fiyatları sizin yüklediğiniz ürünler.csv'den çekiyoruz
+            # Eşleşen ürünün fiyat ve maliyetini sizin ana listenizden (ürünler.csv) çekiyoruz
             mapping[name] = {
                 'Master_Name': m_name, 
                 'Maliyet': master_maliyet_dict.get(m_name, 0.0),
@@ -150,7 +154,7 @@ try:
     st.success(f"🔥 SEÇİLİ DÖNEM NET TEMİZ KÂR: {final_net_kar:,.2f} TL")
 
     st.markdown("---")
-    st.subheader("📋 %100 Canlı Eşleşmeli Kârlılık Raporu")
+    st.subheader("📋 %100 Canlı Eşleşmeli Kârlılık Rapor Tablosu")
     st.dataframe(product_summary_show, use_container_width=True)
 
     csv_data = product_summary_show.to_csv(index=False).encode('utf-8')
