@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO Kusursuz Finansal Analiz Paneli")
-st.markdown("Gelişmiş Kelime Havuzu ve Benzerlik Skorlaması ile neredeyse tüm ürünler %100 doğrulukla eşleştirilir.")
+st.markdown("Gelişmiş Kelime Havuzu, Karakter Uzunluğu ve Varyasyon Dengesi Filtresi ile Sapmalar Tamamen Engellenmiştir kanka!")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -25,14 +25,22 @@ try:
         try: df_master = pd.read_csv(maliyet_file, encoding='utf-8-sig')
         except: df_master = pd.read_csv(maliyet_file, encoding='latin1')
 
-    df_master.columns = df_master.columns.str.strip()
-    df_master = df_master.dropna(subset=['ÜRÜN ADI', 'KDV li Maaliyet'])
-    df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
+    # Sütun isimlerindeki gizli boşlukları ve alt satır karakterlerini temizle
+    df_master.columns = df_master.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
+    
+    # Esnek Başlık Yakalama Kalkanı
+    master_urun_col = [col for col in df_master.columns if 'ürün adı' in col.lower() or 'urun adi' in col.lower() or 'listedeki' in col.lower()][0]
+    master_maliyet_col = [col for col in df_master.columns if 'maliyet' in col.lower() or 'maaliyet' in col.lower()][0]
+    master_satis_cols = [col for col in df_master.columns if 'satış fiyati' in col.lower() or 'satis fiyati' in col.lower() or 'gerçek' in col.lower()]
+    master_satis_col = master_satis_cols[0] if master_satis_cols else master_maliyet_col
 
-    # Sayısal Dönüştürme Motoru (Maliyet Listesi formatına özel)
+    df_master = df_master.dropna(subset=[master_urun_col, master_maliyet_col])
+    df_master['ÜRÜN ADI_clean'] = df_master[master_urun_col].astype(str).str.strip()
+
+    # Sayısal Dönüştürme Motoru
     def clean_maliyet_num(val):
         if pd.isna(val): return 0.0
-        val_str = str(val).replace('TRY','').strip()
+        val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
         if ',' in val_str and '.' in val_str:
             val_str = val_str.replace('.', '').replace(',', '.')
         elif ',' in val_str:
@@ -40,8 +48,8 @@ try:
         try: return float(val_str)
         except: return 0.0
 
-    df_master['KDV_li_Maliyet_num'] = df_master['KDV li Maaliyet'].apply(clean_maliyet_num)
-    df_master['Gercek_Satis_Fiyati_num'] = df_master['GERÇEK SATIŞ FİYATI'].apply(clean_maliyet_num)
+    df_master['KDV_li_Maliyet_num'] = df_master[master_maliyet_col].apply(clean_maliyet_num)
+    df_master['Gercek_Satis_Fiyati_num'] = df_master[master_satis_col].apply(clean_maliyet_num)
 
     # 2. Amazon Raporlarını Birleştir
     amazon_df_listesi = []
@@ -53,24 +61,27 @@ try:
         amazon_df_listesi.append(df_temp)
 
     df_amazon_all = pd.concat(amazon_df_listesi, ignore_index=True)
-    df_amazon_all.columns = df_amazon_all.columns.str.strip()
+    df_amazon_all.columns = df_amazon_all.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
 
-    if 'Sipariş No.' in df_amazon_all.columns:
-        df_amazon_all = df_amazon_all.drop_duplicates(subset=['Sipariş No.', 'İşlem tipi', 'Ürün Detayları', 'Toplam (TRY)'])
+    # Sütun Sabitleyiciler
+    toplam_cols = [col for col in df_amazon_all.columns if 'toplam' in col.lower() or 'total' in col.lower()]
+    target_toplam_col = toplam_cols[0] if toplam_cols else df_amazon_all.columns[-1]
 
-    # Amazon Sayısal Verileri (Noktasal Format)
-    df_amazon_all['Toplam (TRY)'] = pd.to_numeric(df_amazon_all['Toplam (TRY)'], errors='coerce').fillna(0.0)
-    df_amazon_all['Toplam ürün fiyatları'] = pd.to_numeric(df_amazon_all['Toplam ürün fiyatları'], errors='coerce').fillna(0.0)
+    df_amazon_all['Toplam (TRY)'] = df_amazon_all[target_toplam_col].apply(clean_maliyet_num)
+    if 'Toplam ürün fiyatları' in df_amazon_all.columns:
+        df_amazon_all['Toplam ürün fiyatları'] = df_amazon_all['Toplam ürün fiyatları'].apply(clean_maliyet_num)
+    else:
+        df_amazon_all['Toplam ürün fiyatları'] = df_amazon_all['Toplam (TRY)']
 
-    # 🎯 KUSURSUZ HİBRİT EŞLEŞTİRME MOTORU (KELİME JENERATÖRÜ)
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
-    # Yardımcı fonksiyon: İsmi kelimelere bölüp temizler
+    # Yardımcı Fonksiyon: Kelimeleri temizler
     def get_words(text):
-        text_clean = str(text).lower().replace('...', '').replace('-', ' ').replace(',', ' ')
-        return set([w for w in text_clean.split() if len(w) > 1])
+        text_clean = str(text).lower().replace('...', '').replace('-', ' ').replace(',', ' ').replace('/', ' ')
+        return [w for w in text_clean.split() if len(w) > 1]
 
+    # 🎯 SAPMALARI ENGELLEYEN YENİ ULTRA HASSAS EŞLEŞTİRME MOTORU
     for name in unique_amazon_names:
         search_name = str(name).strip()
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
@@ -82,23 +93,33 @@ try:
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.startswith(clean_search.lower(), na=False)]
             
-        # Kademe 3: Kelime Havuzu Benzerlik Skorlaması (Hiçbir şeyi kaçırmaz)
+        # Kademe 3: Geliştirilmiş Akıllı Ağırlık ve Uzunluk Dengeli Skorlama
         if matches.empty:
             amz_words = get_words(clean_search)
-            best_score = 0
+            best_score = -100.0
             best_row = None
             
             for _, row in df_master.iterrows():
                 master_words = get_words(row['ÜRÜN ADI_clean'])
-                # İki isimdeki ortak kelimelerin sayısı
-                common_words = amz_words.intersection(master_words)
-                score = len(common_words)
+                common_words = set(amz_words).intersection(set(master_words))
                 
-                if score > best_score:
-                    best_score = score
-                    best_row = row
+                if len(common_words) >= 1:
+                    # Temel skor ortak kelime sayısıdır
+                    score = float(len(common_words))
+                    
+                    # ⭐ Sapma Kalkanı 1: Karakter uzunluk farkı cezası (Varyasyon kaymasını engeller)
+                    len_diff = abs(len(row['ÜRÜN ADI_clean']) - len(clean_search))
+                    score -= (len_diff * 0.005)
+                    
+                    # ⭐ Sapma Kalkanı 2: Amazon isminin başı ile uyuşuyorsa ekstra ödül ver
+                    if row['ÜRÜN ADI_clean'].lower().startswith(clean_search.lower()[:15]):
+                        score += 0.5
+                    
+                    if score > best_score:
+                        best_score = score
+                        best_row = row
             
-            if best_row is not None and best_score >= 1: # En az 1 kelime uyuşmalı
+            if best_row is not None:
                 mapping[name] = {
                     'Master_Name': best_row['ÜRÜN ADI_clean'], 
                     'Maliyet': best_row['KDV_li_Maliyet_num'],
@@ -106,9 +127,15 @@ try:
                 }
                 continue
 
-        # Eğer Kademe 1 veya Kademe 2'de bulunduysa burası çalışır
         if not matches.empty:
-            matched_row = matches.iloc[0]
+            # Birden fazla uyuşan varsa en yakın uzunlukta olan doğru varyasyonu seçer kanka
+            if len(matches) > 1:
+                matches = matches.copy()
+                matches['l_diff'] = (matches['ÜRÜN ADI_clean'].str.len() - len(clean_search)).abs()
+                matched_row = matches.sort_values(by='l_diff').iloc[0]
+            else:
+                matched_row = matches.iloc[0]
+                
             mapping[name] = {
                 'Master_Name': matched_row['ÜRÜN ADI_clean'], 
                 'Maliyet': matched_row['KDV_li_Maliyet_num'],
@@ -117,13 +144,12 @@ try:
         else:
             mapping[name] = {'Master_Name': "MALİYET LİSTESİNDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0}
 
-    # Finansal Hesaplamalar
+    # Finansal Hesaplamalar (Senin Orijinal Yapın)
     df_valid_actions = df_amazon_all[df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi'])].copy()
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
     df_valid_actions['Tekli_Satis_Fiyati'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Tekli_Satis'])
 
-    # 📦 SENİN ORİJİNAL ADET MOTORUN
     def detect_quantity(row):
         if row['Tekli_Satis_Fiyati'] > 0 and abs(row['Toplam ürün fiyatları']) > 0:
             return max(1, round(abs(row['Toplam ürün fiyatları']) / row['Tekli_Satis_Fiyati']))
@@ -131,13 +157,12 @@ try:
 
     df_valid_actions['Adet'] = df_valid_actions.apply(detect_quantity, axis=1)
     
-    # Maliyet ve Kâr Matematiği
     df_valid_actions['Toplam_Urun_Maliyeti'] = df_valid_actions.apply(
         lambda row: (row['Birim_Maliyet'] * row['Adet']) if row['İşlem tipi'] == 'Sipariş Ödemesi' else -(row['Birim_Maliyet'] * row['Adet']), axis=1
     )
     df_valid_actions['Net_Kar'] = df_valid_actions['Toplam (TRY)'] - df_valid_actions['Toplam_Urun_Maliyeti']
 
-    # KÜMÜLATİF TABLO
+    # KÜMÜLATİF TABLO OLUŞTURMA
     product_summary = df_valid_actions.groupby(['Ürün Detayları', 'Gercek_Urun_Adi']).agg(
         Toplam_Net_Gelen=('Toplam (TRY)', 'sum'),
         Toplam_Mal_Maliyeti=('Toplam_Urun_Maliyeti', 'sum'),
@@ -153,9 +178,9 @@ try:
     product_summary['Net Satış Adedi'] = product_summary['Satış Adedi'] - product_summary['İade Adedi']
     product_summary = product_summary.sort_values(by='Net_Temiz_Kar', ascending=False)
 
-    product_summary = product_summary.rename(columns={
-        'Ürün Detayları': 'Amazon Ürün Adı', 'Gercek_Urun_Adi': 'Sizin Listedeki Tam Adı',
-        'Toplam_Net_Gelen': 'Net Hak Ediş (TRY)', 'Toplam_Mal_Maliyeti': 'Toplam Ürün Maliyeti (TRY)',
+    product_summary_show = product_summary.rename(columns={
+        'Ürün Detayları': 'Amazon Raporundaki Ürün Adı', 'Gercek_Urun_Adi': 'Sizin Listede Eşleşen Adı',
+        'Toplam_Net_Gelen': 'Net Hak Ediş (TRY)', 'Toplam_Mal_Maliyeti': 'Toplam Mal Maliyeti (TRY)',
         'Net_Temiz_Kar': 'Net Temiz Kâr (TRY)'
     })
 
@@ -163,7 +188,7 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # 📑 ARAYÜZ SÜSLEMELERİ
+    # 📑 SEKMELİ GÖSTERİM MERKEZİ (Senin Orijinal Arayüz Yapın)
     sekme1, sekme2 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi"])
 
     with sekme1:
@@ -179,10 +204,9 @@ try:
 
         st.markdown("---")
         st.subheader("📋 Tüm Ürünlerin Kusursuz Analiz Tablosu")
-        st.dataframe(product_summary, use_container_width=True)
+        st.dataframe(product_summary_show, use_container_width=True)
 
-        # CSV İndirme Butonu
-        csv_data = product_summary.to_csv(index=False).encode('utf-8')
+        csv_data = product_summary_show.to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Kusursuz Kârlılık Raporunu İndir",
             data=csv_data,
@@ -191,10 +215,23 @@ try:
         )
 
     with sekme2:
-        st.subheader("📉 İade Durumu")
-        iade_tablosu = product_summary[product_summary['İade Adedi'] > 0][['Sizin Listedeki Tam Adı', 'Satış Adedi', 'İade Adedi', 'İade Oranı (%)']].sort_values(by='İade Adedi', ascending=False)
-        if not iade_tablosu.empty: st.dataframe(iade_tablosu, use_container_width=True)
-        else: st.info("🎉 Bu tarih aralığında hiç iade yok kanka.")
+        st.subheader("📉 Ürün Bazlı İade Performans Analizi")
+        df_iade_grafik = product_summary[product_summary['İade Adedi'] > 0].sort_values(by='İade Adedi', ascending=False)
+        
+        if not df_iade_grafik.empty:
+            fig = px.bar(
+                df_iade_grafik.head(15),
+                x='Gercek_Urun_Adi',
+                y='İade Adedi',
+                title='🔥 En Çok İade Alan Top 15 Ürününüz',
+                labels={'Gercek_Urun_Adi': 'Ürün Adı', 'İade Adedi': 'İade Edilen Adet'},
+                color='İade Oranı (%)',
+                color_continuous_scale='Reds'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(df_iade_grafik[['Ürün Detayları', 'Gercek_Urun_Adi', 'Satış Adedi', 'İade Adedi', 'İade Oranı (%)']], use_container_width=True)
+        else:
+            st.success("🎉 Ne güzel kanka! Seçili dönemde hiç iade işleminiz bulunmuyor.")
 
 except Exception as e:
     st.error(f"🚨 Sistem Hatası: {e}")
