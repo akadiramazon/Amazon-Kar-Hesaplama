@@ -42,7 +42,7 @@ try:
             st.error(f"Maliyet dosyasında '{col}' sütunu bulunamadı! Lütfen excel sütun isimlerini kontrol et kanka.")
             st.stop()
             
-    # Temizlik ve Sayısallaştırma Modülleri (SENİN ORİJİNAL MANTIĞIN)
+    # Temizlik ve Sayısallaştırma Modülleri
     df_master['ASIN_clean'] = df_master['ASIN'].astype(str).str.strip().str.upper()
     df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
     
@@ -58,7 +58,7 @@ try:
             
     df_master['KDV_li_Maliyet_num'] = df_master['KDV\'li Maliyet'].apply(clean_currency)
     
-    # GÜNCEL STOK SÜTUNUNU BULMA
+    # GÜNCEL STOK SÜTUNUNU BULMA (Esnek Yapı)
     guncel_stok_col = next((c for c in ['Güncel Stok', 'GÜNCEL STOK', 'Stok', 'STOK', 'FBA Stok'] if c in df_master.columns), None)
     if guncel_stok_col:
         df_master['Guncel_Stok_num'] = pd.to_numeric(df_master[guncel_stok_col], errors='coerce').fillna(0).astype(int)
@@ -81,7 +81,7 @@ try:
         
     df_amazon_raw = pd.concat(amazon_df_list, ignore_index=True)
     
-    # Amazon Raporu Sütun Standartlaştırma (SENİN ORİJİNAL MANTIĞIN)
+    # Amazon Raporu Sütun Standartlaştırma
     amz_cols = df_amazon_raw.columns.tolist()
     type_col = next((c for c in amz_cols if c.lower() in ['type', 'tür', 'işlem türü', 'transaction type', 'event_type']), None)
     amount_col = next((c for c in amz_cols if c.lower() in ['amount', 'tutar', 'total', 'toplam', 'fiyat', 'price']), None)
@@ -89,10 +89,10 @@ try:
     desc_col = next((c for c in amz_cols if c.lower() in ['description', 'ürün detayları', 'açıklama', 'product details']), None)
     
     if not type_col or not amount_col:
-        st.error("Amazon finans raporunda 'Tür' (Type) veya 'Tutar' (Amount) sütunları tespit edilemedi kanka!")
+        st.error("Amazon finans raporunda 'Tür' (Type) Oyster 'Tutar' (Amount) sütunları tespit edilemedi kanka!")
         st.stop()
         
-    # Amazon Sayı Temizliği (SENİN ORİJİNAL MANTIĞIN)
+    # Amazon Sayı Temizliği
     def clean_amazon_amount(val):
         if pd.isna(val):
             return 0.0
@@ -110,19 +110,22 @@ try:
             
     df_amazon_raw['Amount_num'] = df_amazon_raw[amount_col].apply(clean_amazon_amount)
     
-    # 🕵️‍♂️ REKOR KIRAN ASIN CIMBIZLAMA ALGORİTMASI (SENİN ORİJİNAL MANTIĞIN)
+    # 🕵️‍♂️ REKOR KIRAN ASIN CIMBIZLAMA ALGORİTMASI
     def extract_asin_or_sku(row):
         desc = str(row.get(desc_col, '')).strip().upper() if desc_col else ''
         sku = str(row.get(sku_col, '')).strip().upper() if sku_col else ''
         
+        # 1. Öncelik Açıklamadaki Standart ASIN Yapısı (B0...)
         match_asin = re.search(r'B0[A-Z0-9]{8}', desc)
         if match_asin:
             return match_asin.group(0)
             
+        # 2. Öncelik Özel JBM Kodları
         match_jbm = re.search(r'JBM[A-Z0-9]+', desc)
         if match_jbm:
             return match_jbm.group(0)
             
+        # 3. Öncelik SKU Sütununun Kendisi
         if sku and sku != 'NAN':
             return sku
             
@@ -130,7 +133,7 @@ try:
         
     df_amazon_raw['Key_Code'] = df_amazon_raw.apply(extract_asin_or_sku, axis=1)
     
-    # 🎯 HESAPLAMA MOTORU VE KÂR-ZARAR AYRIŞTIRMASI (%100 SENİN KODUNUN KALBİ)
+    # 🎯 HESAPLAMA MOTORU VE KÂR-ZARAR AYRIŞTIRMASI
     total_revenue = 0.0
     total_amazon_fees = 0.0
     total_product_cost = 0.0
@@ -145,12 +148,16 @@ try:
         if amt == 0:
             continue
             
+        # Gelir ve Satış Tanımı
         if amt > 0 and (any(x in t_type for x in ['order', 'satış', 'sipariş', 'deal', 'payment']) or t_type == 'nan' or t_type == ''):
             total_revenue += amt
             
+            # Maliyet Çizelgesiyle Tokuşturma Alanı
             maliyet_row = pd.DataFrame()
             if k_code:
+                # Önce ASIN Kolonundan Ara
                 maliyet_row = df_master[df_master['ASIN_clean'] == k_code]
+                # Bulamazsa SKU Kolonundan Ara
                 if maliyet_row.empty:
                     maliyet_row = df_master[df_master['ASIN_clean'].str.contains(k_code, regex=False)]
                     
@@ -175,6 +182,7 @@ try:
                     'Ürün Maliyeti (TL)': 0.0
                 })
         else:
+            # Giderler ve Amazon Kesintileri
             total_amazon_fees += abs(amt)
             
     df_valid_actions = pd.DataFrame(valid_records)
@@ -182,36 +190,6 @@ try:
     # Finansal Sonuçların Bağlanması
     net_profit = total_revenue - total_amazon_fees - total_product_cost
     profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0.0
-    
-    # 📥 YENİ GELİŞTİRME: TEK TIKLA FİNANSAL ÖZET İNDİRME SİHİRBAZI
-    # Arka plandaki hiçbir hesabı bozmadan sadece en son sonuçları çeker kanka
-    su_an = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    rapor_metni = f"""==================================================
-🎯 AMAZON CEO FINANSAL PERFORMANS RAPORU
-==================================================
-Rapor Tarihi: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-💰 ANA MALİ GÖSTERGELER (TL)
---------------------------------------------------
-💵 Toplam Net Ciro          : {total_revenue:,.2f} TL
-💸 Amazon Genel Kesintileri  : {total_amazon_fees:,.2f} TL
-📦 Karşılaştırılan Maliyet  : {total_product_cost:,.2f} TL
-🔥 NET TEMİZ KÂRIN          : {net_profit:,.2f} TL
-📈 Kâr Marjı                : %{profit_margin:.1f}
-
-==================================================
-Satışlarınız daim, dükkanınız bereketli olsun! 🚀
-=================================================="""
-
-    # Sol menünün en altına şık indirme butonunu ekliyoruz
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📑 Özet Rapor Çıktısı")
-    st.sidebar.download_button(
-        label="📥 Finansal Özeti İndir (.txt)",
-        data=rapor_metni,
-        file_name=f"Amazon_Finans_Ozet_{su_an}.txt",
-        mime="text/plain"
-    )
     
     # 📈 DEV METRİK KUTULARI (FİNANSAL ÖZET PANELİ)
     st.subheader("💰 Bu Dönemin Finansal Rapor Özeti")
