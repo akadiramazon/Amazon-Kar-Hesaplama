@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import re
 
 # 🌟 SADELİK VE NETLİK AYARI
 st.set_page_config(page_title="Amazon CEO Kâr Dashboard", layout="wide")
@@ -41,11 +42,14 @@ if not amazon_df_list:
 combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
 # 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU
-# Sütun isimlerini sabitleyelim
-sku_col = 'Stok Kodu (SKU)' if 'Stok Kodu (SKU)' in df_mst.columns else (df_mst.columns[0] if len(df_mst.columns) > 0 else '')
-asin_col = 'ASIN' if 'ASIN' in df_mst.columns else ''
-cost_col = 'KDV li Maaliyet' if 'KDV li Maaliyet' in df_mst.columns else (df_mst.columns[2] if len(df_mst.columns) > 2 else '')
-price_col = 'SATIŞ FİYATI\n(KDV DAHİL)' if 'SATIŞ FİYATI\n(KDV DAHİL)' in df_mst.columns else (df_mst.columns[3] if len(df_mst.columns) > 3 else '')
+# Sütun isimlerini dinamik olarak yakalayalım
+sku_col = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU'] if c in df_mst.columns), df_mst.columns[0])
+asin_col = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_mst.columns), None)
+cost_col = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET'] if c in df_mst.columns), None)
+
+# Eğer özel sütun adları bulunamazsa indekslere göre eşleyelim
+if not cost_col and len(df_mst.columns) > 2:
+    cost_col = df_mst.columns[2]
 
 # Amazon raporundan gelen satışları ve ücretleri kümülatif toplayalım
 total_revenue = 0.0
@@ -54,28 +58,49 @@ total_product_cost = 0.0
 
 # Sipariş satırları üzerinde dönüp kârı hesaplayalım
 for index, row in combined_amazon.iterrows():
-    # Satış fiyatını al (Gelen sütun ismine göre esnek yapı)
-    amount = float(str(row.get('amount', row.get('Tutar', 0))).replace(',', '.')) if row.get('amount') or row.get('Tutar') else 0.0
-    type_str = str(row.get('type', row.get('Tür', ''))).lower()
+    # Tutar ve Tür sütunlarını esnek yakala
+    amount_val = row.get('amount', row.get('Tutar', row.get('amount_description', 0)))
+    try:
+        amount = float(str(amount_val).replace(',', '.'))
+    except:
+        amount = 0.0
+        
+    type_str = str(row.get('type', row.get('Tür', row.get('event_type', '')))).lower()
     sku_str = str(row.get('seller-sku', row.get('Stok Kodu', ''))).strip().upper()
+    description_str = str(row.get('description', row.get('Ürün Detayları', ''))).strip().upper()
     
+    # 🕵️‍♂️ ASIN Cımbızlama Motoru (Metnin içindeki B0 veya JBM kodlarını ayıklar)
+    found_asin = None
+    asin_match = re.search(r'(B0[A-Z0-9]{8}|JBM[A-Z0-9]*)', description_str)
+    if asin_match:
+        found_asin = asin_match.group(1)
+
     # Sadece satış ve siparişle ilgili finansal hareketleri alalım
-    if 'order' in type_str or 'satış' in type_str or 'sipariş' in type_str:
+    if any(x in type_str for x in ['order', 'satış', 'sipariş', 'deal']):
         if amount > 0:
             total_revenue += amount
             
-            # Ürünün bizim listemizdeki maliyetini bulalım (SKU veya ASIN üzerinden)
-            if df_mst is not None and sku_col in df_mst.columns:
-                maliyet_row = df_mst[df_mst[sku_col].astype(str).str.strip().str.upper() == sku_str]
-                if not maliyet_row.empty:
+            # Ürünün bizim listemizdeki maliyetini bulalım (Önce ASIN, sonra SKU ile çakıştır)
+            maliyet_row = pd.DataFrame()
+            if df_mst is not None:
+                if found_asin and asin_col and asin_col in df_mst.columns:
+                    maliyet_row = df_mst[df_mst[asin_col].astype(str).str.strip().str.upper() == found_asin]
+                if maliyet_row.empty and sku_str and sku_col in df_mst.columns:
+                    maliyet_row = df_mst[df_mst[sku_col].astype(str).str.strip().str.upper() == sku_str]
+                
+                # Maliyeti ekle
+                if not maliyet_row.empty and cost_col:
                     val_cost = str(maliyet_row.iloc[0].get(cost_col, 0)).replace(',', '.')
-                    # Sayısal değere çevirip ekle
                     try:
                         total_product_cost += float(re.sub(r'[^\d.]', '', val_cost))
                     except:
                         pass
         else:
             # Amazon kesintileri (Giderler)
+            total_amazon_fees += abs(amount)
+    else:
+        # Genel diğer kesintiler (Depolama, abonelik vb.)
+        if amount < 0:
             total_amazon_fees += abs(amount)
 
 # Nihai Net Kâr Hesabı
