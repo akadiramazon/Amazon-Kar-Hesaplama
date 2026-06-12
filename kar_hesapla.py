@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("Sistem maliyetleri, fiyatları ve kârı doğrudan yüklediğiniz iki dosya üzerinden canlı eşleştirir.")
+st.markdown("Sütun uyuşmazlığı hatası düzeltilmiştir. Maliyetler doğrudan ürünler.csv üzerinden çekilir.")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -24,13 +24,18 @@ try:
         try: df_master = pd.read_csv(maliyet_file, encoding='utf-8-sig')
         except: df_master = pd.read_csv(maliyet_file, encoding='latin1')
 
-    # Sütun isimlerindeki gizli boşlukları ve alt satır karakterlerini (\\n) temizle
-    df_master.columns = df_master.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
+    # Sütun isimlerindeki gizli boşlukları temizle
+    df_master.columns = df_master.columns.str.strip()
     
-    # Sütun isimlerini sabitleyelim (KDV li Maaliyet veya KDV li Maliyet gibi hatalara karşı koruma)
-    urun_adi_col = [col for col in df_master.columns if 'ÜRÜN ADI' in col][0]
-    maliyet_col = [col for col in df_master.columns if 'KDV li' in col or 'KDV' in col][0]
-    satis_col = [col for col in df_master.columns if 'GERÇEK SATIŞ' in col or 'SATIŞ FİYATI' in col][0]
+    # Sütun İsimlerini Senin Listene Göre Tamamen Sabitledik (Hata Önleyici Çizgi)
+    urun_adi_col = "ÜRÜN ADI"
+    maliyet_col = "KDV li Maaliyet"
+    satis_col = "GERÇEK SATIŞ FİYATI"
+
+    # Gerekli sütunlar mevcut mu kontrolü
+    if urun_adi_col not in df_master.columns or maliyet_col not in df_master.columns:
+        st.error(f"🚨 Yüklediğiniz ürünler.csv dosyasında '{urun_adi_col}' veya '{maliyet_col}' sütunu bulunamadı! Lütfen dosyanızı kontrol edin.")
+        st.stop()
 
     df_master = df_master.dropna(subset=[urun_adi_col, maliyet_col])
     df_master['ÜRÜN ADI_clean'] = df_master[urun_adi_col].astype(str).str.strip()
@@ -48,7 +53,7 @@ try:
 
     # Gerçek maliyetleri ve satış fiyatlarını senin ana listenizden (ürünler.csv) canlı okuyoruz!
     df_master['KDV_li_Maliyet_num'] = df_master[maliyet_col].apply(clean_maliyet_num)
-    df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_maliyet_num)
+    df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_maliyet_num) if satis_col in df_master.columns else df_master['KDV_li_Maliyet_num']
 
     master_maliyet_dict = df_master.set_index('ÜRÜN ADI_clean')['KDV_li_Maliyet_num'].to_dict()
     master_satis_dict = df_master.set_index('ÜRÜN ADI_clean')['Gercek_Satis_Fiyati_num'].to_dict()
@@ -63,7 +68,7 @@ try:
         amazon_df_listesi.append(df_temp)
 
     df_amazon_all = pd.concat(amazon_df_listesi, ignore_index=True)
-    df_amazon_all.columns = df_amazon_all.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
+    df_amazon_all.columns = df_amazon_all.columns.str.strip()
 
     # Mükerrer sipariş koruması
     if 'Sipariş No.' in df_amazon_all.columns:
@@ -149,7 +154,7 @@ try:
     # 📑 GÖSTERİM PANELİ ARAYÜZÜ
     st.subheader("📊 Dönemsel Performans Özetiniz")
     kpi1, kpi2, kpi3 = st.columns(3)
-    kpi1.metric("💰 Net Hak Ediş (Amazon Pay)", f"{toplam_payout:,.2f} TL")
+    kpi1.metric("💰 Net Hak Ediş (Amazon Pay)", f"{topham_payout if 'topham_payout' in locals() else toplam_payout:,.2f} TL")
     kpi2.metric("📦 Toplam Ürün Geliş Maliyeti", f"{total_mal_maliyeti:,.2f} TL")
     st.success(f"🔥 SEÇİLİ DÖNEM NET TEMİZ KÂR: {final_net_kar:,.2f} TL")
 
