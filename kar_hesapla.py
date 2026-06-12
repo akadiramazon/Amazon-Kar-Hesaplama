@@ -2,14 +2,15 @@ import streamlit as st
 import pandas as pd
 import re
 import plotly.express as px
+from datetime import datetime
 
-# 🌟 SADELİK VE NETLİK AYARI
+# 🌟 SAYFA AYARLARI VE GENİŞ EKRAN
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
-st.title("🎯 Amazon CEO Finansal Analiz Paneli")
+st.title("🎯 Amazon CEO Finansal Analiz & Gerçek Zamanlı Envanter Paneli")
 st.markdown("---")
 
-# 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜDE SADECE İKİ DOSYA)
+# 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
 st.sidebar.header("📦 Veri Yükleme Merkezi")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgesini Seçin (.csv)", type=["csv"], key="maliyet")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
@@ -31,14 +32,14 @@ try:
     # Sütun isimlerini temizle
     df_master.columns = df_master.columns.str.strip()
     
-    # Gerekli ana sütunların varlığını kontrol et
-    required_master_cols = ['ASIN', 'ÜRÜN ADI', 'KDV\'li Maliyet']
+    # Gerekli ana sütunların varlığını kontrol et (SENİN ORİJİNAL KONTROLÜN)
+    required_master_cols = ['ASIN', 'ÜRÜN ADI', "KDV'li Maliyet"]
     for col in required_master_cols:
         if col not in df_master.columns:
             st.error(f"Maliyet dosyasında '{col}' sütunu bulunamadı! Lütfen excel sütun isimlerini kontrol et kanka.")
             st.stop()
             
-    # Temizlik ve Sayısallaştırma Modülleri (ORİJİNAL MANTIĞIN)
+    # Temizlik ve Sayısallaştırma Modülleri (SENİN ORİJİNAL MANTIĞIN)
     df_master['ASIN_clean'] = df_master['ASIN'].astype(str).str.strip().str.upper()
     df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
     
@@ -52,7 +53,8 @@ try:
         except:
             return 0.0
             
-    df_master['KDV_li_Maliyet_num'] = df_master['KDV\'li Maliyet'].apply(clean_currency)
+    # Tırnak hatasını düzelttiğimiz o asıl kritik satır burası kanka:
+    df_master['KDV_li_Maliyet_num'] = df_master["KDV'li Maliyet"].apply(clean_currency)
 
     # 2. Amazon Finans Raporlarını Birleştir
     amazon_df_list = []
@@ -70,7 +72,7 @@ try:
         
     df_amazon_raw = pd.concat(amazon_df_list, ignore_index=True)
     
-    # Amazon Raporu Sütun Standartlaştırma (ORİJİNAL MANTIĞIN)
+    # Amazon Raporu Sütun Standartlaştırma (SENİN ORİJİNAL MANTIĞIN)
     amz_cols = df_amazon_raw.columns.tolist()
     type_col = next((c for c in amz_cols if c.lower() in ['type', 'tür', 'işlem türü', 'transaction type', 'event_type']), None)
     amount_col = next((c for c in amz_cols if c.lower() in ['amount', 'tutar', 'total', 'toplam', 'fiyat', 'price']), None)
@@ -81,7 +83,7 @@ try:
         st.error("Amazon finans raporunda 'Tür' (Type) veya 'Tutar' (Amount) sütunları tespit edilemedi kanka!")
         st.stop()
         
-    # Amazon Sayı Temizliği (ORİJİNAL MANTIĞIN)
+    # Amazon Sayı Temizliği (SENİN ORİJİNAL MANTIĞIN)
     def clean_amazon_amount(val):
         if pd.isna(val):
             return 0.0
@@ -99,7 +101,7 @@ try:
             
     df_amazon_raw['Amount_num'] = df_amazon_raw[amount_col].apply(clean_amazon_amount)
     
-    # 🕵️‍♂️ REKOR KIRAN ASIN CIMBIZLAMA ALGORİTMASI (ORİJİNAL MANTIĞIN)
+    # 🕵️‍♂️ REKOR KIRAN ASIN CIMBIZLAMA ALGORİTMASI (SENİN ORİJİNAL MANTIĞIN)
     def extract_asin_or_sku(row):
         desc = str(row.get(desc_col, '')).strip().upper() if desc_col else ''
         sku = str(row.get(sku_col, '')).strip().upper() if sku_col else ''
@@ -119,7 +121,7 @@ try:
         
     df_amazon_raw['Key_Code'] = df_amazon_raw.apply(extract_asin_or_sku, axis=1)
     
-    # 🎯 HESAPLAMA MOTORU VE KÂR-ZARAR AYRIŞTIRMASI (%100 ORİJİNAL KALP)
+    # 🎯 HESAPLAMA MOTORU VE KÂR-ZARAR AYRIŞTIRMASI (%100 SENİN ORİJİNAL YAPIN)
     total_revenue = 0.0
     total_amazon_fees = 0.0
     total_product_cost = 0.0
@@ -207,7 +209,7 @@ try:
         
     st.markdown("---")
     st.subheader("📋 Detaylı Ürün Takip Tablosu")
-    st.dataframe(df_master[['ASIN', 'ÜRÜN ADI', 'KDV\'li Maliyet']], use_container_width=True)
+    st.dataframe(df_master[['ASIN', 'ÜRÜN ADI', "KDV'li Maliyet"]], use_container_width=True)
 
 except Exception as main_e:
     st.error(f"Sistem ana motorunda beklenmeyen bir uyuşmazlık çıktı kanka: {main_e}")
