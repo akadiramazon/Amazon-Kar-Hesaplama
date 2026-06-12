@@ -28,11 +28,11 @@ try:
     # Sütun isimlerindeki gizli boşlukları ve alt satır karakterlerini temizle
     df_master.columns = df_master.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
     
-    # Esnek Başlık Yakalama Kalkanı
-    master_urun_col = [col for col in df_master.columns if 'ürün adı' in col.lower() or 'urun adi' in col.lower() or 'listedeki' in col.lower()][0]
-    master_maliyet_col = [col for col in df_master.columns if 'maliyet' in col.lower() or 'maaliyet' in col.lower()][0]
-    master_satis_cols = [col for col in df_master.columns if 'satış fiyati' in col.lower() or 'satis fiyati' in col.lower() or 'gerçek' in col.lower()]
-    master_satis_col = master_satis_cols[0] if master_satis_cols else master_maliyet_col
+    # ⭐ GÜVENLİ VE SABİT SÜTUN EŞLEŞTİRME MOTORU
+    # Eğer sütun bulunamazsa index out of range vermemesi için güvenli kontrol yapıyoruz kanka
+    master_urun_col = "ÜRÜN ADI" if "ÜRÜN ADI" in df_master.columns else df_master.columns[0]
+    master_maliyet_col = "KDV li Maaliyet" if "KDV li Maaliyet" in df_master.columns else df_master.columns[1]
+    master_satis_col = "GERÇEK SATIŞ FİYATI" if "GERÇEK SATIŞ FİYATI" in df_master.columns else master_maliyet_col
 
     df_master = df_master.dropna(subset=[master_urun_col, master_maliyet_col])
     df_master['ÜRÜN ADI_clean'] = df_master[master_urun_col].astype(str).str.strip()
@@ -64,8 +64,7 @@ try:
     df_amazon_all.columns = df_amazon_all.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
 
     # Sütun Sabitleyiciler
-    toplam_cols = [col for col in df_amazon_all.columns if 'toplam' in col.lower() or 'total' in col.lower()]
-    target_toplam_col = toplam_cols[0] if toplam_cols else df_amazon_all.columns[-1]
+    target_toplam_col = "Toplam (TRY)" if "Toplam (TRY)" in df_amazon_all.columns else df_amazon_all.columns[-1]
 
     df_amazon_all['Toplam (TRY)'] = df_amazon_all[target_toplam_col].apply(clean_maliyet_num)
     if 'Toplam ürün fiyatları' in df_amazon_all.columns:
@@ -104,14 +103,13 @@ try:
                 common_words = set(amz_words).intersection(set(master_words))
                 
                 if len(common_words) >= 1:
-                    # Temel skor ortak kelime sayısıdır
                     score = float(len(common_words))
                     
-                    # ⭐ Sapma Kalkanı 1: Karakter uzunluk farkı cezası (Varyasyon kaymasını engeller)
+                    # ⭐ Sapma Kalkanı 1: Karakter uzunluk farkı cezası
                     len_diff = abs(len(row['ÜRÜN ADI_clean']) - len(clean_search))
                     score -= (len_diff * 0.005)
                     
-                    # ⭐ Sapma Kalkanı 2: Amazon isminin başı ile uyuşuyorsa ekstra ödül ver
+                    # ⭐ Sapma Kalkanı 2: Amazon isminin başı ile uyuşuyorsa ödül ver
                     if row['ÜRÜN ADI_clean'].lower().startswith(clean_search.lower()[:15]):
                         score += 0.5
                     
@@ -128,7 +126,6 @@ try:
                 continue
 
         if not matches.empty:
-            # Birden fazla uyuşan varsa en yakın uzunlukta olan doğru varyasyonu seçer kanka
             if len(matches) > 1:
                 matches = matches.copy()
                 matches['l_diff'] = (matches['ÜRÜN ADI_clean'].str.len() - len(clean_search)).abs()
@@ -144,7 +141,7 @@ try:
         else:
             mapping[name] = {'Master_Name': "MALİYET LİSTESİNDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0}
 
-    # Finansal Hesaplamalar (Senin Orijinal Yapın)
+    # Finansal Hesaplamalar
     df_valid_actions = df_amazon_all[df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi'])].copy()
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
@@ -188,7 +185,7 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # 📑 SEKMELİ GÖSTERİM MERKEZİ (Senin Orijinal Arayüz Yapın)
+    # 📑 SEKMELİ GÖSTERİM MERKEZİ
     sekme1, sekme2 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi"])
 
     with sekme1:
