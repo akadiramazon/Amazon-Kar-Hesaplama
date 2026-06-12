@@ -93,7 +93,7 @@ for index, row in combined_amazon.iterrows():
             if df_mst is not None:
                 if found_asin and asin_col and asin_col in df_mst.columns:
                     maliyet_row = df_mst[df_mst[asin_col].astype(str).str.strip().str.upper() == found_asin]
-                if maliyet_row.empty sku_str and sku_col in df_mst.columns:
+                if maliyet_row.empty and sku_str and sku_col in df_mst.columns:
                     maliyet_row = df_mst[df_mst[sku_col].astype(str).str.strip().str.upper() == sku_str]
                 
                 # Maliyeti ekle
