@@ -12,7 +12,7 @@ st.markdown("---")
 # 📊 SADECE GEREKLİ İKİ KUTU (YAN MENÜDE)
 st.sidebar.header("📦 Rapor Yükleme Alanı")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgenizi Seçin (.csv)", type=["csv"], key="maliyet")
-amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Hesap Raporlarını Seçin (.csv)", type=["csv"], accept_multiple_files=True, key="amazon")
+amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Tarih Raporlarını Seçin (.csv)", type=["csv"], accept_multiple_files=True, key="amazon")
 
 if maliyet_file is None or not amazon_files:
     st.info("💡 Kanka, kâr durumunu anında canlı görmek için sol taraftan Maliyet Çizelgeni ve Amazon Raporlarını yüklemen yeterli! Bekliyorum.")
@@ -41,70 +41,70 @@ if not amazon_df_list:
 
 combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
-# 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU
-# Sütun isimlerini dinamik olarak yakalayalım
-sku_col = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU', 'Stok Kodu'] if c in df_mst.columns), df_mst.columns[0])
-asin_col = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_mst.columns), None)
-cost_col = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET', 'KDV li Maliyet'] if c in df_mst.columns), None)
+# 🧮 SÜTUN YAKALAMA MOTORU (TÜM İHTİMALLER)
+sku_col_mst = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU', 'Stok Kodu', 'Stok Kodu '] if c in df_mst.columns), df_mst.columns[0])
+asin_col_mst = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_mst.columns), None)
+cost_col_mst = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET', 'KDV li Maliyet', 'KDV\'li Maliyet'] if c in df_mst.columns), None)
 
-# Eğer özel sütun adları bulunamazsa indekslere göre eşleyelim
-if not cost_col and len(df_mst.columns) > 2:
-    cost_col = df_mst.columns[2]
+if not cost_col_mst and len(df_mst.columns) > 2:
+    cost_col_mst = df_mst.columns[2]
 
-# Amazon raporundan gelen satışları ve ücretleri kümülatif toplayalım
 total_revenue = 0.0
 total_amazon_fees = 0.0
 total_product_cost = 0.0
 
+# Amazon Raporu Sütun Adlarını Otomatik Keşfetme
+amz_cols = combined_amazon.columns.tolist()
+amount_col = next((c for c in ['tutar', 'amount', 'total', 'toplam', 'fiyat', 'price'] if c.lower() in [x.lower() for x in amz_cols]), None)
+type_col = next((c for c in ['tür', 'type', 'işlem türü', 'transaction type', 'event_type'] if c.lower() in [x.lower() for x in amz_cols]), None)
+sku_col_amz = next((c for c in ['seller-sku', 'stok kodu', 'sku', 'ürün kodu'] if c.lower() in [x.lower() for x in amz_cols]), None)
+desc_col_amz = next((c for c in ['description', 'ürün detayları', 'açıklama', 'product details'] if c.lower() in [x.lower() for x in amz_cols]), None)
+
 # Sipariş satırları üzerinde dönüp kârı hesaplayalım
 for index, row in combined_amazon.iterrows():
-    # Tutar ve Tür sütunlarını esnek yakala
-    amount_col_name = next((c for c in ['amount', 'Tutar', 'amount_description', 'Total', 'total'] if c in combined_amazon.columns), None)
-    amount_val = row.get(amount_col_name, 0) if amount_col_name else 0.0
-    
+    # Tutar Değerini Al ve Temizle
+    amount_val = row.get(amount_col, 0) if amount_col else 0.0
     try:
-        amount = float(str(amount_val).replace(',', '.'))
+        # Metinsel para formatlarını (nokta, virgül, para birimi simgesi) temizle
+        amount_clean = str(amount_val).replace('.', '').replace(',', '.')
+        amount_clean = re.sub(r'[^\d.-]', '', amount_clean)
+        amount = float(amount_clean)
     except:
         amount = 0.0
         
-    type_col_name = next((c for c in ['type', 'Tür', 'event_type', 'Transaction Type'] if c in combined_amazon.columns), None)
-    type_str = str(row.get(type_col_name, '')).lower() if type_col_name else ''
-    
-    sku_col_amz = next((c for c in ['seller-sku', 'Stok Kodu', 'sku'] if c in combined_amazon.columns), None)
+    type_str = str(row.get(type_col, '')).lower() if type_col else ''
     sku_str = str(row.get(sku_col_amz, '')).strip().upper() if sku_col_amz else ''
-    
-    desc_col_amz = next((c for c in ['description', 'Ürün Detayları', 'product_details'] if c in combined_amazon.columns), None)
     description_str = str(row.get(desc_col_amz, '')).strip().upper() if desc_col_amz else ''
     
-    # 🕵️‍♂️ ASIN Cımbızlama Motoru (Metnin içindeki B0 veya JBM kodlarını ayıklar)
+    # ASIN Cımbızlama Motoru
     found_asin = None
     asin_match = re.search(r'(B0[A-Z0-9]{8}|JBM[A-Z0-9]*)', description_str)
     if asin_match:
         found_asin = asin_match.group(1)
 
-    # 🚀 EN ESNEK FİLTRE: Eğer satır boş değilse ve bir para hareketi varsa hesaba kat
     if amount != 0:
-        # Eğer pozitif bir tutarsa ve sipariş/satış işlemiyse CİRODUR
-        if amount > 0 and (any(x in type_str for x in ['order', 'satış', 'sipariş', 'deal', 'refund', 'iade']) or type_str == ''):
+        # Gelir Tanımı (Sipariş veya pozitif tutarlı satışlar)
+        if amount > 0 and (any(x in type_str for x in ['order', 'satış', 'sipariş', 'deal', 'payment']) or type_str == ''):
             total_revenue += amount
             
-            # Ürünün bizim listemizdeki maliyetini bulalım (Önce ASIN, sonra SKU ile çakıştır)
+            # Ürünü bizim listedeki maliyetle eşleştir
             maliyet_row = pd.DataFrame()
             if df_mst is not None:
-                if found_asin and asin_col and asin_col in df_mst.columns:
-                    maliyet_row = df_mst[df_mst[asin_col].astype(str).str.strip().str.upper() == found_asin]
-                if maliyet_row.empty and sku_str and sku_col in df_mst.columns:
-                    maliyet_row = df_mst[df_mst[sku_col].astype(str).str.strip().str.upper() == sku_str]
+                if found_asin and asin_col_mst and asin_col_mst in df_mst.columns:
+                    maliyet_row = df_mst[df_mst[asin_col_mst].astype(str).str.strip().str.upper() == found_asin]
+                if maliyet_row.empty and sku_str and sku_col_mst in df_mst.columns:
+                    maliyet_row = df_mst[df_mst[sku_col_mst].astype(str).str.strip().str.upper() == sku_str]
                 
-                # Maliyeti ekle
-                if not maliyet_row.empty and cost_col:
-                    val_cost = str(maliyet_row.iloc[0].get(cost_col, 0)).replace(',', '.')
+                # Maliyet bilgisini ekle
+                if not maliyet_row.empty and cost_col_mst:
+                    val_cost = str(maliyet_row.iloc[0].get(cost_col_mst, 0)).replace('.', '').replace(',', '.')
+                    val_cost = re.sub(r'[^\d.]', '', val_cost)
                     try:
-                        total_product_cost += float(re.sub(r'[^\d.]', '', val_cost))
+                        total_product_cost += float(val_cost)
                     except:
                         pass
         else:
-            # Negatif tutarlar Amazon'un kestiği komisyon, kargo vs. giderleridir
+            # Gider Tanımı (Amazon kesintileri, iadeler, reklamlar vs.)
             total_amazon_fees += abs(amount)
 
 # Nihai Net Kâr Hesabı
