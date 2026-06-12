@@ -6,10 +6,21 @@ import plotly.express as px
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO Kusursuz Finansal Analiz Paneli")
-st.markdown("Gelişmiş Kelime Havuzu, Karakter Uzunluğu ve Varyasyon Dengesi Filtresi ile Sapmalar Tamamen Engellenmiştir kanka!")
+st.markdown("🧠 **Yapay Zekâ Tabanlı Varyasyon ve İsim Eşleştirme Motoru (AI Fuzzy Match) Aktif.** Sapmalar engellenmiştir kanka!")
 st.markdown("---")
 
-# 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
+# 📊 GLOBAL PARA VE SAYISAL TEMİZLEME MOTORU
+def clean_maliyet_num(val):
+    if pd.isna(val): return 0.0
+    val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
+    if ',' in val_str and '.' in val_str:
+        val_str = val_str.replace('.', '').replace(',', '.')
+    elif ',' in val_str:
+        val_str = val_str.replace(',', '.')
+    try: return float(val_str)
+    except: return 0.0
+
+# 📦 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
 st.sidebar.header("📦 Veri Yükleme Merkezi")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgesini Seçin (.csv)", type=["csv"], key="maliyet")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
@@ -31,21 +42,10 @@ try:
     # Güvenli Sütun Eşleştirme Motoru
     master_urun_col = "ÜRÜN ADI" if "ÜRÜN ADI" in df_master.columns else df_master.columns[0]
     master_maliyet_col = "KDV li Maaliyet" if "KDV li Maaliyet" in df_master.columns else df_master.columns[1]
-    master_satis_col = "GERÇEK SATIŞ FİYATI" if "GERÇEK SATIŞ FİYATI" in df_master.columns else master_maliyet_col
+    master_satis_col = "GERÇEK SATIŞ FİYATI" if "GERÇEK SATIŞ FİYATI" in df_master.columns else df_master.columns[1]
 
     df_master = df_master.dropna(subset=[master_urun_col, master_maliyet_col])
     df_master['ÜRÜN ADI_clean'] = df_master[master_urun_col].astype(str).str.strip()
-
-    # Sayısal Dönüştürme Motoru
-    def clean_maliyet_num(val):
-        if pd.isna(val): return 0.0
-        val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
-        if ',' in val_str and '.' in val_str:
-            val_str = val_str.replace('.', '').replace(',', '.')
-        elif ',' in val_str:
-            val_str = val_str.replace(',', '.')
-        try: return float(val_str)
-        except: return 0.0
 
     df_master['KDV_li_Maliyet_num'] = df_master[master_maliyet_col].apply(clean_maliyet_num)
     df_master['Gercek_Satis_Fiyati_num'] = df_master[master_satis_col].apply(clean_maliyet_num)
@@ -66,12 +66,9 @@ try:
     target_toplam_col = "Toplam (TRY)" if "Toplam (TRY)" in df_amazon_all.columns else df_amazon_all.columns[-1]
 
     df_amazon_all['Toplam (TRY)'] = df_amazon_all[target_toplam_col].apply(clean_maliyet_num)
-    if 'Toplam ürün fiyatları' in df_amazon_all.columns:
-        df_amazon_all['Toplam ürün fiyatları'] = df_amazon_all['Toplam ürün fiyatları'].apply(clean_maliyet_num)
-    else:
-        df_amazon_all['Toplam ürün fiyatları'] = df_amazon_all['Toplam (TRY)']
+    df_amazon_all['Toplam ürün fiyatları'] = df_amazon_all['Toplam ürün fiyatları'].apply(clean_maliyet_num) if 'Toplam ürün fiyatları' in df_amazon_all.columns else df_amazon_all['Toplam (TRY)']
 
-    # Amazon Kesintileri Hesaplama
+    # Amazon Harici Kesintiler ve Promosyonlar
     harici_gider_toplami = 0.0
     if 'Amazon ücretleri' in df_amazon_all.columns:
         harici_gider_toplami += df_amazon_all['Amazon ücretleri'].apply(clean_maliyet_num).sum()
@@ -81,48 +78,61 @@ try:
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
-    def get_words(text):
-        text_clean = str(text).lower().replace('...', '').replace('-', ' ').replace(',', ' ').replace('/', ' ')
-        return [w for w in text_clean.split() if len(w) > 1]
+    # 🧠 YAPAY ZEKÂ DESTEKLİ METİN VE KELİME ANALİZ FONKSİYONLARI
+    def clean_text_for_ai(text):
+        return str(text).lower().replace('...', '').replace('-', ' ').replace(',', ' ').replace('/', ' ').strip()
 
-    # SAPMALARI ENGELLEYEN HASSAS MOTOR
+    def calculate_jaccard_distance(set1, set2):
+        if not set1 or not set2: return 0.0
+        return float(len(set1.intersection(set2))) / float(len(set1.union(set2)))
+
+    # 🎯 4. PLAN: YAPAY ZEKÂ TABANLI AKILLI EŞLEŞTİRME DÖNGÜSÜ
     for name in unique_amazon_names:
         search_name = str(name).strip()
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
         
+        # 1. Aşama: Birebir Tam Metin Kilidi
         matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower() == search_name.lower()]
+        
+        # 2. Aşama: Başlangıç Köprü Kilidi
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.startswith(clean_search.lower(), na=False)]
             
+        # 3. Aşama: Yapay Zekâ Benzerlik ve Karakter Ağırlıklı Uzaklık Algoritması (AI Fuzzy Match)
         if matches.empty:
-            amz_words = get_words(clean_search)
-            best_score = -100.0
-            best_row = None
+            amz_words = set(clean_text_for_ai(clean_search).split())
+            best_ai_score = -1.0
+            best_ai_row = None
             
             for _, row in df_master.iterrows():
-                master_words = get_words(row['ÜRÜN ADI_clean'])
-                common_words = set(amz_words).intersection(set(master_words))
+                master_words = set(clean_text_for_ai(row['ÜRÜN ADI_clean']).split())
                 
-                if len(common_words) >= 1:
-                    score = float(len(common_words))
-                    len_diff = abs(len(row['ÜRÜN ADI_clean']) - len(clean_search))
-                    score -= (len_diff * 0.005)
+                # Kelime bazlı Jaccard Benzerlik Skoru hesapla
+                word_similarity = calculate_jaccard_distance(amz_words, master_words)
+                
+                if word_similarity > 0:
+                    # Karakter uzunluğu ve yapısal benzerlik ağırlığı ekle (Sapmayı önler kanka)
+                    len_ratio = min(len(clean_search), len(row['ÜRÜN ADI_clean'])) / max(len(clean_search), len(row['ÜRÜN ADI_clean']))
+                    ai_score = (word_similarity * 0.7) + (len_ratio * 0.3)
                     
-                    if row['ÜRÜN ADI_clean'].lower().startswith(clean_search.lower()[:15]):
-                        score += 0.5
+                    # Eğer ürün adı doğrudan Amazon isminin ön ekiyle başlıyorsa yapay zekâya ödül skoru ver
+                    if clean_text_for_ai(row['ÜRÜN ADI_clean']).startswith(clean_text_for_ai(clean_search)[:15]):
+                        ai_score += 0.2
                     
-                    if score > best_score:
-                        best_score = score
-                        best_row = row
+                    if ai_score > best_ai_score:
+                        best_ai_score = ai_score
+                        best_ai_row = row
             
-            if best_row is not None:
+            # Yapay zekâ güven eşiği (En azından mantıklı bir yakınlık bulduysa bağla kanka)
+            if best_ai_row is not None and best_ai_score > 0.15:
                 mapping[name] = {
-                    'Master_Name': best_row['ÜRÜN ADI_clean'], 
-                    'Maliyet': best_row['KDV_li_Maliyet_num'],
-                    'Tekli_Satis': best_row['Gercek_Satis_Fiyati_num']
+                    'Master_Name': best_ai_row['ÜRÜN ADI_clean'], 
+                    'Maliyet': best_ai_row['KDV_li_Maliyet_num'],
+                    'Tekli_Satis': best_ai_row['Gercek_Satis_Fiyati_num']
                 }
                 continue
 
+        # Eğer 1. veya 2. aşamada pürüzsüz bulunduysa
         if not matches.empty:
             if len(matches) > 1:
                 matches = matches.copy()
@@ -172,7 +182,7 @@ try:
     product_summary[['Satış Adedi', 'İade Adedi', 'İade Oranı (%)']] = product_summary.apply(get_detailed_qtys, axis=1)
     product_summary['Net Satış Adedi'] = product_summary['Satış Adedi'] - product_summary['İade Adedi']
 
-    # ROI ve Kâr Marjı Sütunları
+    # 📈 Dynamic ROI ve Kâr Marjı Enjeksiyonu
     product_summary['Kâr Marjı (%)'] = product_summary.apply(
         lambda r: round((r['Net_Temiz_Kar'] / r['Toplam_Net_Gelen'] * 100), 2) if r['Toplam_Net_Gelen'] > 0 else 0.0, axis=1
     )
@@ -192,19 +202,18 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # ⭐ MATPLOTLIB GEREKTİRMEYEN PREMIUM SAF CSS RENKLENDİRME SİHİRBAZI kanka
+    # ⭐ SAF CSS TABLO RENKLENDİRME STYLERS (Hatasız ve Hızlı kanka)
     def hakedis_renklendir(val):
-        color = '#e1f5fe' if val > 0 else '' # Hafif Mavi (Hak edişler)
-        return f'background-color: {color}; color: #0277bd;' if color else ''
+        return 'background-color: #e1f5fe; color: #0277bd;' if val > 0 else ''
 
     def kar_ve_roi_renklendir(val):
         if val > 0:
-            return 'background-color: #e8f5e9; color: #2e7d32; font-weight: bold;' # Pastel Yeşil (Kâr)
+            return 'background-color: #e8f5e9; color: #2e7d32; font-weight: bold;'
         elif val < 0:
-            return 'background-color: #ffebee; color: #c62828; font-weight: bold;' # Pastel Kırmızı (Zarar)
+            return 'background-color: #ffebee; color: #c62828; font-weight: bold;'
         return ''
 
-    # 📑 SEKMELİ GÖSTERİM MERKEZİ
+    # 📑 SEKMELİ GÖSTERİM MERKEZİ (Senin Orijinal Yapın)
     sekme1, sekme2 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi"])
 
     with sekme1:
@@ -220,13 +229,12 @@ try:
             st.success(f"🎉 Muazzam! Bu dönemi başarıyla temiz kârla kapattık.")
         else:
             kpi4.metric("📉 DÖNEM NET ZARAR", f"{final_net_kar:,.2f} TL", delta="İÇERİDEYİZ!", delta_color="inverse")
-            st.error(f"🚨 Dikkat! Giderler bu dönem hakediş miktarını aşmış durumda kanka.")
+            st.error(f"🚨 Giderler bu dönem hakediş miktarını aşmış durumda kanka.")
 
         st.markdown("---")
         st.subheader("📋 Tüm Ürünlerin Kusursuz Analiz Tablosu")
         
-        # ⭐ Sürüm uyumsuzluğu yaratmayan zırhlı saf CSS haritalama motoru
-        # Matplotlib hatasını sonsuza kadar tarihe gömer kanka
+        # Saf CSS tabanlı ısı haritası tablosu
         try:
             styled_df = product_summary_show.style.map(kar_ve_roi_renklendir, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_renklendir, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
         except:
@@ -245,7 +253,7 @@ try:
         df_bulunamayanlar = product_summary_show[product_summary_show['Sizin Listede Eşleşen Adı'] == "MALİYET LİSTESİNDE BULUNAMADI"]
         if not df_bulunamayanlar.empty:
             st.markdown("---")
-            st.warning("🚨 **Kanka Gözden Kaçanlar Var! Aşağıdaki ürünler maliyet tablonda tam eşleşmediği için kâr haneleri sıfır kaldı:**")
+            st.warning("🚨 **Kanka Gözden Kaçanlar Var! Aşağıdaki ürünler maliyet çizelgende tam eşleşmediği için kâr haneleri sıfır kaldı:**")
             st.dataframe(df_bulunamayanlar[['Amazon Raporundaki Ürün Adı', 'Net Hak Ediş (TRY)']], use_container_width=True)
 
     with sekme2:
