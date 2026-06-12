@@ -4,7 +4,7 @@ import re
 import plotly.express as px
 from datetime import datetime
 
-# 🌟 SAYFA AYARLARI VE GENİŞ EKRAN
+# 🌟 SADELİK VE NETLİK AYARI
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO Finansal Analiz & Gerçek Zamanlı Envanter Paneli")
@@ -78,18 +78,18 @@ try:
             st.warning(f"{f.name} dosyası okunurken atlandı: {e}")
             
     if not amazon_df_list:
-        st.error("Yüklenen Amazon finans raporlarından hiçbiri geçerli bir veri içermiyor!")
+        st.error("Yüklenen Amazon finans raporlarından hiçbir veri okunamadı kanka!")
         st.stop()
         
     df_amazon_raw = pd.concat(amazon_df_list, ignore_index=True)
     
-    # 🎯 YENİLİK: ULTRA ESNEK VE BÜYÜK/KÜÇÜK HARFE DUYARSIZ SÜTUN BULUCU
+    # 🎯 SENİN YENİ GERÇEK RAPOR SÜTUNLARINA UYUMLU ESNEK BULUCU
     amz_cols = df_amazon_raw.columns.tolist()
     
-    type_col = next((c for c in amz_cols if c.lower() in ['tür', 'type', 'işlem türü', 'transaction type', 'event_type', 'tür ']), None)
-    amount_col = next((c for c in amz_cols if c.lower() in ['toplam', 'amount', 'tutar', 'amount_description', 'total', 'total ', 'toplam ', 'fatura tutarı']), None)
-    sku_col = next((c for c in amz_cols if c.lower() in ['sku', 'seller-sku', 'stok kodu', 'sku ', 'stok kodu ']), None)
-    desc_col = next((c for c in amz_cols if c.lower() in ['açıklama', 'description', 'ürün detayları', 'product details', 'açıklama ']), None)
+    type_col = next((c for c in amz_cols if c.lower() in ['işlem tipi', 'tür', 'type', 'işlem türü', 'transaction type', 'event_type']), None)
+    amount_col = next((c for c in amz_cols if c.lower() in ['toplam (try)', 'toplam', 'amount', 'tutar', 'amount_description', 'total']), None)
+    sku_col = next((c for c in amz_cols if c.lower() in ['sipariş no.', 'sku', 'seller-sku', 'stok kodu']), None)
+    desc_col = next((c for c in amz_cols if c.lower() in ['ürün detayları', 'açıklama', 'description', 'ürün detayları', 'product details']), None)
     
     if not type_col or not amount_col:
         st.error(f"Kanka sütun eşleşmesi başarısız oldu! Rapordaki mevcut sütunlar şunlar: {amz_cols}. Lütfen kontrol et.")
@@ -148,7 +148,7 @@ try:
         if amt == 0:
             continue
             
-        if amt > 0 and (any(x in t_type for x in ['order', 'satış', 'sipariş', 'deal', 'payment', 'fatura']) or t_type == 'nan' or t_type == ''):
+        if amt > 0 and (any(x in t_type for x in ['order', 'satış', 'sipariş', 'deal', 'payment', 'fatura', 'tutar']) or t_type == 'nan' or t_type == ''):
             total_revenue += amt
             
             maliyet_row = pd.DataFrame()
@@ -261,7 +261,7 @@ Satışlarınız daim, dükkanınız bereketli olsun! 🚀
                 stock_map = dict(zip(df_amz_stock['asin1'].astype(str).str.strip().str.upper(), df_amz_stock['quantity-available']))
                 df_master['Guncel_Stok_num'] = df_master['ASIN_clean'].map(stock_map).fillna(0).astype(int)
             else:
-                st.sidebar.warning("Canlı stok dosyasında 'asin1' veya 'quantity-available' sütunları eşleşmedi kanka!")
+                st.sidebar.warning("Canlı stok dosyasında 'asin1' or 'quantity-available' sütunları eşleşmedi kanka!")
         except Exception as e:
             st.sidebar.error(f"Canlı stok txt dosyası işlenirken hata: {e}")
             
