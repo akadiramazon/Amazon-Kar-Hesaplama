@@ -5,22 +5,49 @@ import plotly.express as px
 # 🌟 SAYFA AYARLARI VE GENİŞ EKRAN
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
-# 🎨 SADE VE KURUMSAL FİNANS TEMASI (SAF CSS)
+# 🎨 PREMIUM GÖZ YORMAYAN GECELER TEMASI (SAF CSS DARK MODE)
 st.markdown("""
     <style>
-    /* Global Font ve Arka Plan */
-    html, body, [data-testid="stAppViewContainer"] {
+    /* Global Karanlık Arka Plan ve Yazı Rengi */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #121212 !important;
+        color: #e0e0e0 !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #fafafa;
     }
     
-    /* Minimalist ve Gölgeli KPI Kartları */
+    /* Sol Kenar Menüsünün (Sidebar) Karanlığa Gömülmesi */
+    [data-testid="stSidebar"] {
+        background-color: #1e1e1e !important;
+        border-right: 1px solid #2d2d2d;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e0e0e0 !important;
+    }
+    
+    /* Sekme (Tabs) Renklerinin Karanlık Mod Ayarı */
+    button[data-testid="stMarkdownContainer"] {
+        color: #e0e0e0 !important;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: #1e1e1e !important;
+        border-radius: 8px;
+        padding: 4px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        color: #888888 !important;
+    }
+    .stTabs [aria-selected="true"] {
+        color: #ffffff !important;
+        font-weight: bold !important;
+    }
+    
+    /* Premium Gece Modu KPI Kartları kanka */
     .kpi-container {
-        background-color: #ffffff;
+        background-color: #1e1e1e;
         padding: 20px;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-        border: 1px solid #eaeaea;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        border: 1px solid #2d2d2d;
         margin-bottom: 15px;
     }
     .border-hakedis { border-top: 4px solid #1e88e5; }
@@ -33,22 +60,29 @@ st.markdown("""
         font-size: 13px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        color: #666666;
+        color: #aaaaaa;
         font-weight: 600;
         margin-bottom: 6px;
     }
     .kpi-value {
         font-size: 26px;
         font-weight: 700;
-        color: #222222;
+        color: #ffffff;
     }
     
-    /* Tablo Çerçeve Düzenlemesi */
+    /* Karanlık Tablo Çerçeve Düzenlemesi */
     [data-testid="stDataFrame"] {
-        border: 1px solid #e0e0e0;
+        border: 1px solid #2d2d2d !important;
         border-radius: 10px;
         padding: 5px;
-        background-color: #ffffff;
+        background-color: #1e1e1e !important;
+    }
+    
+    /* Bilgilendirme Kutularının Rengini Yumuşatma */
+    .stAlert {
+        background-color: #1e1e1e !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #2d2d2d !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -246,15 +280,15 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # ⭐ SADECE YAZI RENKLERİNİ DEĞİŞTİREN KURUMSAL FINANS STYLER MOTORU (Gözü yormaz!)
+    # ⭐ GECE MODU İÇİN ÖZEL SAF YAZI RENKLENDİRME MOTORU (Karanlıkta parlar kanka!)
     def hakedis_stil(val):
-        return 'color: #0d47a1; font-weight: 600;' if val > 0 else ''
+        return 'color: #64b5f6; font-weight: 600;' if val > 0 else '' # Neon Mavi Yazı
 
     def kar_ve_roi_stil(val):
         if val > 0:
-            return 'color: #2e7d32; font-weight: bold;' # Sadece yazı pastel yeşil
+            return 'color: #81c784; font-weight: bold;' # Neon Pastel Yeşil Yazı
         elif val < 0:
-            return 'color: #c62828; font-weight: bold;' # Sadece yazı pastel kırmızı
+            return 'color: #e57373; font-weight: bold;' # Neon Pastel Kırmızı Yazı
         return ''
 
     # 📑 SEKMELİ GÖSTERİM MERKEZİ
@@ -263,7 +297,7 @@ try:
     with sekme1:
         st.subheader("📊 Dönemsel Performans Özetiniz")
         
-        # 🎨 YENİ MİNİMALİST VE ŞIK KPI BLOKLARI kanka
+        # 🎨 YENİ NESİL GECE MODU KPI BLOKLARI
         k1, k2, k3, k4 = st.columns(4)
         k1.markdown(f'<div class="kpi-container border-hakedis"><div class="kpi-title">💰 Net Hak Ediş</div><div class="kpi-value">{toplam_payout:,.2f} TL</div></div>', unsafe_allow_html=True)
         k2.markdown(f'<div class="kpi-container border-maliyet"><div class="kpi-title">📦 Mal Maliyeti</div><div class="kpi-value">{total_mal_maliyeti:,.2f} TL</div></div>', unsafe_allow_html=True)
@@ -275,12 +309,12 @@ try:
         if final_net_kar >= 0:
             st.success("🎉 Tebrikler kanka! Amazon lojistik tazminatları dahil dönemi kârla tamamladık.")
         else:
-            st.error("🚨 Bu dönem finansal giderler toplam cironun üzerine çıkmış durumda kanka.")
+            st.error("🚨 Giderler bu dönem hakediş miktarını aşmış durumda kanka.")
 
         st.markdown("---")
-        st.subheader("📋 Kurumsal Finans Raporu Tablosu")
+        st.subheader("📋 Koyu Tema Finans Raporu Tablosu")
         
-        # ⭐ Saf Yazı Renklendirmeli Premium Tablo Bağlantısı
+        # Dark mode için uyarlanmış zırhlı tablo bağlayıcı kanka
         try:
             styled_df = product_summary_show.style.map(kar_ve_roi_stil, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_stil, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
         except:
@@ -308,6 +342,7 @@ try:
         df_iade_grafik = product_summary[product_summary['İade Adedi'] > 0].sort_values(by='İade Adedi', ascending=False)
         
         if not df_iade_grafik.empty:
+            # Grafiği de dark mode ile uyumlu yaptık kanka template='plotly_dark' çaktık!
             fig = px.bar(
                 df_iade_grafik.head(15),
                 x='Gercek_Urun_Adi',
@@ -315,7 +350,8 @@ try:
                 title='🔥 En Çok İade Alan Top 15 Ürününüz',
                 labels={'Gercek_Urun_Adi': 'Ürün Adı', 'İade Adedi': 'İade Edilen Adet'},
                 color='İade Oranı (%)',
-                color_continuous_scale='Reds'
+                color_continuous_scale='Reds',
+                template='plotly_dark'
             )
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(df_iade_grafik[['Ürün Detayları', 'Gercek_Urun_Adi', 'Satış Adedi', 'İade Adedi', 'İade Oranı (%)']], use_container_width=True)
