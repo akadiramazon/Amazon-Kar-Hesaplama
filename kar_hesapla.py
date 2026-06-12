@@ -1,128 +1,121 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
-import re
 
-# 🌟 1. PREMIUM GÖRSEL DÜZEN VE TEMA AYARLARI
-st.set_page_config(
-    page_title="Amazon CEO Pro Dashboard", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# 🌟 SADELİK VE NETLİK AYARI
+st.set_page_config(page_title="Amazon CEO Kâr Dashboard", layout="wide")
 
-st.title("🎯 Amazon CEO Finansal Analiz & Envanter Yönetim Merkezi")
+st.title("🎯 Amazon CEO Net Kâr ve Finansal Analiz Paneli")
 st.markdown("---")
 
-# 📊 YAN MENÜ (SIDEBAR) VERİ YÜKLEME ALANI
-st.sidebar.header("📦 Veri Yükleme Merkezi")
-maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgesini Seçin (.csv)", type=["csv"], key="maliyet")
-amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Raporlarını Seçin (.csv)", type=["csv"], accept_multiple_files=True, key="amazon")
-live_stock_file = st.sidebar.file_uploader("3️⃣ Canlı Stok Raporunu Seçin (.txt)", type=["txt"], key="live_stock")
+# 📊 SADECE GEREKLİ İKİ KUTU (YAN MENÜDE)
+st.sidebar.header("📦 Rapor Yükleme Alanı")
+maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgenizi Seçin (.csv)", type=["csv"], key="maliyet")
+amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Hesap Raporlarını Seçin (.csv)", type=["csv"], accept_multiple_files=True, key="amazon")
 
-# Ana değişkenleri globalde başlatalım
-df_mst_list = None
-combined_amazon_df = None
-
-# VERİ KONTROLÜ VE EŞLEŞTİRME MOTORU
-if maliyet_file is not None and live_stock_file is not None:
-    try:
-        # Amazon canlı stok txt dosyasını oku
-        df_amz_list = pd.read_csv(live_stock_file, sep='\t', on_bad_lines='skip')
-        df_mst_list = pd.read_csv(maliyet_file)
-        
-        df_amz_list.columns = df_amz_list.columns.str.strip()
-        df_mst_list.columns = df_mst_list.columns.str.strip()
-        
-        # ASIN üzerinden %100 isim senkronizasyonu
-        asin_map = dict(zip(df_amz_list['asin1'].astype(str).str.strip().str.upper(), df_amz_list['item-name']))
-        df_mst_list['ÜRÜN ADI'] = df_mst_list['ASIN'].astype(str).str.strip().str.upper().map(asin_map).fillna(df_mst_list['ÜRÜN ADI'])
-        
-        # 📄 YENİLİK 1: TEK TIKLA HAFTALIK ÖZET RAPORU ÇIKTISI
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📥 Raporlama Merkezi")
-        
-        rapor_metni = f"=== AMAZON CEO HAFTALIK FINANSAL RAPOR ===\nTarih: {datetime.now().strftime('%d-%m-%Y %H:%M')}\n\n"
-        rapor_metni += f"Toplam Aktif Ürün Sayısı: {len(df_mst_list)}\n"
-        rapor_metni += "Kanka haftalık yüklediğin en taze verilerin finansal özeti başarıyla arşivlenmiştir.\n"
-        
-        st.sidebar.download_button(
-            label="📄 TEK TIKLA HAFTALIK RAPORU İNDİR",
-            data=rapor_metni,
-            file_name=f"Haftalik_Finans_Raporu_{datetime.now().strftime('%Y%m%d')}.txt",
-            mime="text/plain"
-        )
-    except Exception as e:
-        st.sidebar.error(f"Dosya okuma hatası kanka: {e}")
-
-# Amazon Finans Raporlarını Birleştirme Döngüsü
-if amazon_files:
-    amazon_df_list = []
-    for f in amazon_files:
-        try:
-            temp_df = pd.read_csv(f)
-            temp_df.columns = temp_df.columns.str.strip()
-            amazon_df_list.append(temp_df)
-        except Exception as e:
-            pass
-    if amazon_df_list:
-        combined_amazon_df = pd.concat(amazon_df_list, ignore_index=True)
-
-# Dosyalar yüklenmediyse kullanıcıyı karşılayan temiz boş düzen
-if maliyet_file is None or not amazon_files or live_stock_file is None:
-    st.info("💡 Analizin başlaması ve yeni paneli görmek için lütfen sol menüden 3 dosyayı da yükle kanka!")
+if maliyet_file is None or not amazon_files:
+    st.info("💡 Kanka, kâr durumunu anında canlı görmek için sol taraftan Maliyet Çizelgeni ve Amazon Raporlarını yüklemen yeterli! Bekliyorum.")
     st.stop()
 
-# --- VERİLER YÜKLENDİKTEN SONRA AÇILAN EKRAN ---
+# Verileri okuma adımları
+try:
+    df_mst = pd.read_csv(maliyet_file)
+    df_mst.columns = df_mst.columns.str.strip()
+except Exception as e:
+    st.error(f"Maliyet dosyası okunurken bir hata oluştu kanka: {e}")
+    st.stop()
 
-# 🎯 YENİLİK 2: AKILLI ÜRÜN ARAMA VE DETAYLI ÜRÜN KARTI
-st.subheader("🔍 Akıllı Ürün Detay Kartı")
-arama_kelimesi = st.text_input("Tabloda boğulma! Aramak istediğin ürünün adını, ASIN veya SKU kodunu yaz kanka:", "", placeholder="Örn: Supra, Pelikan, B000...")
+amazon_df_list = []
+for f in amazon_files:
+    try:
+        temp_df = pd.read_csv(f)
+        temp_df.columns = temp_df.columns.str.strip()
+        amazon_df_list.append(temp_df)
+    except Exception as e:
+        pass
 
-if arama_kelimesi and df_mst_list is not None:
-    arama_sonucu = df_mst_list[
-        df_mst_list['ÜRÜN ADI'].astype(str).str.contains(arama_kelimesi, case=False) |
-        df_mst_list['ASIN'].astype(str).str.contains(arama_kelimesi, case=False) |
-        df_mst_list['Stok Kodu (SKU)'].astype(str).str.contains(arama_kelimesi, case=False)
-    ]
+if not amazon_df_list:
+    st.warning("Yüklenen Amazon raporları tam okunamadı kanka.")
+    st.stop()
+
+combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
+
+# 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU
+# Sütun isimlerini sabitleyelim
+sku_col = 'Stok Kodu (SKU)' if 'Stok Kodu (SKU)' in df_mst.columns else (df_mst.columns[0] if len(df_mst.columns) > 0 else '')
+asin_col = 'ASIN' if 'ASIN' in df_mst.columns else ''
+cost_col = 'KDV li Maaliyet' if 'KDV li Maaliyet' in df_mst.columns else (df_mst.columns[2] if len(df_mst.columns) > 2 else '')
+price_col = 'SATIŞ FİYATI\n(KDV DAHİL)' if 'SATIŞ FİYATI\n(KDV DAHİL)' in df_mst.columns else (df_mst.columns[3] if len(df_mst.columns) > 3 else '')
+
+# Amazon raporundan gelen satışları ve ücretleri kümülatif toplayalım
+total_revenue = 0.0
+total_amazon_fees = 0.0
+total_product_cost = 0.0
+
+# Sipariş satırları üzerinde dönüp kârı hesaplayalım
+for index, row in combined_amazon.iterrows():
+    # Satış fiyatını al (Gelen sütun ismine göre esnek yapı)
+    amount = float(str(row.get('amount', row.get('Tutar', 0))).replace(',', '.')) if row.get('amount') or row.get('Tutar') else 0.0
+    type_str = str(row.get('type', row.get('Tür', ''))).lower()
+    sku_str = str(row.get('seller-sku', row.get('Stok Kodu', ''))).strip().upper()
     
-    if not arama_sonucu.empty:
-        ilk_urun = arama_sonucu.iloc[0]
-        st.info(f"📦 **Ürün Adı:** {ilk_urun.get('ÜRÜN ADI', 'Ürün Adı Bulunamadı')}")
-        
-        col_kart1, col_kart2, col_kart3 = st.columns(3)
-        with col_kart1:
-            st.metric("💰 Toplam Maliyet", f"{ilk_urun.get('TOPLAM MALİYET', ilk_urun.get('TOPLAM\\n MALİYET', '0'))} TL")
-        with col_kart2:
-            st.metric("📈 Satış Fiyatı (KDV Dahil)", f"{ilk_urun.get('SATIŞ FİYATI (KDV DAHİL)', ilk_urun.get('SATIŞ FİYATI\\n(KDV DAHİL)', '0'))} TL")
-        with col_kart3:
-            st.metric("🔥 Net Kâr", f"{ilk_urun.get('NET KAR', '0')} TL")
+    # Sadece satış ve siparişle ilgili finansal hareketleri alalım
+    if 'order' in type_str or 'satış' in type_str or 'sipariş' in type_str:
+        if amount > 0:
+            total_revenue += amount
             
-        st.caption(f"**ASIN:** {ilk_urun.get('ASIN', '-')} | **SKU:** {ilk_urun.get('Stok Kodu (SKU)', '-')}")
-    else:
-        st.warning("Kanka aradığın kelimeye ait bir ürün maliyet listesinde uyuşmadı.")
+            # Ürünün bizim listemizdeki maliyetini bulalım (SKU veya ASIN üzerinden)
+            if df_mst is not None and sku_col in df_mst.columns:
+                maliyet_row = df_mst[df_mst[sku_col].astype(str).str.strip().str.upper() == sku_str]
+                if not maliyet_row.empty:
+                    val_cost = str(maliyet_row.iloc[0].get(cost_col, 0)).replace(',', '.')
+                    # Sayısal değere çevirip ekle
+                    try:
+                        total_product_cost += float(re.sub(r'[^\d.]', '', val_cost))
+                    except:
+                        pass
+        else:
+            # Amazon kesintileri (Giderler)
+            total_amazon_fees += abs(amount)
+
+# Nihai Net Kâr Hesabı
+net_profit = total_revenue - total_amazon_fees - total_product_cost
+profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0.0
+
+# 📈 DEV GÖRSEL ÖZET KUTULARI
+st.subheader("💰 Bu Dönemin Finansal Net Raporu")
+kp1, kp2, kp3, kp4 = st.columns(4)
+with kp1:
+    st.metric("💵 Toplam Net Ciro", f"{total_revenue:,.2f} TL")
+with kp2:
+    st.metric("💸 Amazon Genel Kesintileri", f"{total_amazon_fees:,.2f} TL")
+with kp3:
+    st.metric("📦 Toplam Ürün Maliyetin", f"{total_product_cost:,.2f} TL")
+with kp4:
+    st.metric("🔥 NET TEMİZ KÂRIN", f"{net_profit:,.2f} TL", delta=f"%{profit_margin:.1f} Kâr Marjı")
 
 st.markdown("---")
-st.subheader("📊 Genel Performans Analiz Raporları")
 
-# 🧮 MATEMATİKSEL HESAPLAMA VE GRAFİK MOTORU
-if combined_amazon_df is not None and df_mst_list is not None:
-    try:
-        # Örnek kümülatif hesaplamalar (Sitenin patlamaması için her şeyi toparlayan ana döngü)
-        total_rows = len(combined_amazon_df)
-        
-        # Üst Özet Kutuları
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("📈 Toplam İşlem Satırı", f"{total_rows} Adet")
-        with col2:
-            st.metric("📦 Listelenen Ürün Gücü", f"{len(df_mst_list)} Çeşit")
-        with col3:
-            st.metric("⚡ Sistem Statüsü", "Canlı / Aktif")
-            
-        st.markdown("---")
-        st.subheader("📋 Birleştirilmiş Veri İzleme Tablosu")
-        st.dataframe(df_mst_list, use_container_width=True)
-        
-    except Exception as e:
-        st.error(f"Matematik motorunda küçük bir uyuşmazlık oldu kanka: {e}")
+# 📊 REKOR VE GRAFİK ŞOVU
+col_grafik1, col_grafik2 = st.columns(2)
+
+with col_grafik1:
+    st.subheader("📈 Gelir vs Gider Dengesi")
+    finans_ozet = pd.DataFrame({
+        'Kalem': ['Net Ciro', 'Amazon Kesintisi', 'Ürün Maliyeti', 'Net Kâr'],
+        'Tutar (TL)': [total_revenue, total_amazon_fees, total_product_cost, max(0, net_profit)]
+    })
+    fig1 = px.bar(finans_ozet, x='Kalem', y='Tutar (TL)', color='Kalem', text_auto='.2s',
+                  color_discrete_sequence=px.colors.qualitative.Pastel)
+    st.plotly_chart(fig1, use_container_width=True)
+
+with col_grafik2:
+    st.subheader("🎯 Kârlılık Dağılım Röntgeni")
+    fig2 = px.pie(values=[total_amazon_fees, total_product_cost, max(0, net_profit)], 
+                  names=['Amazon Giderleri', 'Ürün Ana Maliyetleri', 'Net Kâr Semeresi'],
+                  color_discrete_sequence=['#ff6b6b', '#4dadf7', '#2ecc71'])
+    st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown("---")
+st.subheader("📋 Detaylı Ürün Takip Tablosu")
+st.dataframe(df_mst, use_container_width=True)
