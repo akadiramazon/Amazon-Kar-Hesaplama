@@ -5,10 +5,21 @@ import pandas as pd
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("Envanter Destekli Eşleştirme Motoru Aktif. 'Maliyet Listesinde Bulunamadı' hatası tamamen engellenmiştir kanka!")
+st.markdown("Envanter Destekli Eşleştirme Motoru Aktif. Tüm Sütun ve Tanım Hataları Giderilmiştir kanka!")
 st.markdown("---")
 
-# 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
+# 📊 GLOBAL PARA VE SAYISAL TEMİZLEME MOTORU (EN TEPEDE - SABİT)
+def clean_amazon_money(val):
+    if pd.isna(val): return 0.0
+    val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
+    if ',' in val_str and '.' in val_str:
+        val_str = val_str.replace('.', '').replace(',', '.')
+    elif ',' in val_str:
+        val_str = val_str.replace(',', '.')
+    try: return float(val_str)
+    except: return 0.0
+
+# 📦 VERI YÜKLEME MERKEZİ (SOL MENÜ)
 st.sidebar.header("📦 Veri Yükleme Merkezi")
 genis_file = st.sidebar.file_uploader("1️⃣ Geniş Maliyet Listesini Seçin (revize_genis_maliyet.csv)", type=["csv"], key="genis")
 aktif_file = st.sidebar.file_uploader("2️⃣ Aktif Liste Kayıtları Raporunu Seçin (.txt veya .csv)", type=["txt", "csv"], key="aktif")
@@ -39,21 +50,13 @@ try:
     df_master['ÜRÜN ADI_clean'] = df_master[urun_adi_col].astype(str).str.strip()
     df_master['ASIN_upper'] = df_master[asin_master_col].astype(str).str.strip().str.upper()
 
-    # Sayısal Dönüştürme Motoru
-    def clean_maliyet_num(val):
-        if pd.isna(val): return 0.0
-        val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
-        if ',' in val_str and '.' in val_str:
-            val_str = val_str.replace('.', '').replace(',', '.')
-        elif ',' in val_str:
-            val_str = val_str.replace(',', '.')
-        try: return float(val_str)
-        except: return 0.0
+    df_master['KDV_li_Maliyet_num'] = df_master[maliyet_col].apply(clean_amazon_money)
+    df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_amazon_money) if satis_col in df_master.columns else df_master['KDV_li_Maliyet_num']
 
-    df_master['KDV_li_Maliyet_num'] = df_master[maliyet_col].apply(clean_maliyet_num)
-    df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_maliyet_num) if satis_col in df_master.columns else df_master['KDV_li_Maliyet_num']
+    master_maliyet_dict = df_master.set_index('ÜRÜN ADI_clean')['KDV_li_Maliyet_num'].to_dict()
+    master_satis_dict = df_master.set_index('ÜRÜN ADI_clean')['Gercek_Satis_Fiyati_num'].to_dict()
 
-    # 2. Amazon Aktif Liste Kayıtları Raporunu Oku (İsim-ASIN Köprüsü)
+    # 2. Amazon Amazon Aktif Liste Kayıtları Raporunu Oku
     try: df_aktif = pd.read_csv(aktif_file, sep="\t", on_bad_lines='skip', encoding='utf-8')
     except:
         try: df_aktif = pd.read_csv(aktif_file, sep="\t", on_bad_lines='skip', encoding='utf-8-sig')
@@ -61,7 +64,6 @@ try:
         
     df_aktif.columns = df_aktif.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
     
-    # Aktif listedeki sütunları sabitleyelim
     aktif_name_col = 'item-name' if 'item-name' in df_aktif.columns else df_aktif.columns[2]
     aktif_asin_col = 'asin1' if 'asin1' in df_aktif.columns else df_aktif.columns[1]
     
@@ -107,7 +109,7 @@ try:
         search_name = str(name).strip()
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
         
-        # Kademe 1: Önce Amazon Aktif Envanter Raporundan bu ismin gerçek ASIN kodunu buluyoruz!
+        # Kademe 1: Aktif Envanter Raporundan gerçek ASIN kodunu yakala
         aktif_matches = df_aktif[df_aktif['clean_item_name'].str.lower() == search_name.lower()]
         if aktif_matches.empty:
             aktif_matches = df_aktif[df_aktif['clean_item_name'].str.lower().str.startswith(clean_search.lower(), na=False)]
@@ -123,14 +125,14 @@ try:
             else:
                 found_asin = aktif_matches.iloc[0]['clean_asin']
                 
-        # Kademe 2: Bulduğumuz o kesin ASIN koduyla genişmaliyet dosyasına nokta atışı dalıyoruz!
+        # Kademe 2: Bulunan ASIN koduyla genişmaliyete dalış yap
         matched_row = None
         if found_asin:
             master_matches = df_master[df_master['ASIN_upper'] == found_asin]
             if not master_matches.empty:
                 matched_row = master_matches.iloc[0]
                 
-        # Eğer envanter raporunda çıkmadıysa, B planı olarak doğrudan isim araması yap
+        # B Planı: İsim üzerinden arama yap
         if matched_row is None:
             master_matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower() == search_name.lower()]
             if master_matches.empty:
@@ -189,12 +191,12 @@ try:
     def get_detailed_qtys(r):
         prod_rows = df_valid_actions[df_valid_actions[target_detay_col] == r[target_detay_col]]
         if target_tip_col:
-            s_adet = prod_rows[~prod_rows[target_tip_col].astype(str).str.upper().str.contains('İADE|REFUND|RETURN')]['Adet'].sum()
-            i_adet = prod_rows[prod_rows[target_tip_col].astype(str).str.upper().str.contains('İADE|REFUND|RETURN')]['Adet'].sum()
+            st_adet = prod_rows[~prod_rows[target_tip_col].astype(str).str.upper().str.contains('İADE|REFUND|RETURN')]['Adet'].sum()
+            ia_adet = prod_rows[prod_rows[target_tip_col].astype(str).str.upper().str.contains('İADE|REFUND|RETURN')]['Adet'].sum()
         else:
-            s_adet = prod_rows['Adet'].sum()
-            i_adet = 0
-        return pd.Series([s_adet, i_adet])
+            st_adet = prod_rows['Adet'].sum()
+            ia_adet = 0
+        return pd.Series([st_adet, ia_adet])
 
     product_summary[['Satış Adedi', 'İade Adedi']] = product_summary.apply(get_detailed_qtys, axis=1)
     product_summary['Net Satış Adedi'] = product_summary['Satış Adedi'] - product_summary['İade Adedi']
