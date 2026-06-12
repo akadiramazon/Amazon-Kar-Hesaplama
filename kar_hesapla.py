@@ -5,7 +5,7 @@ import pandas as pd
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("Canlı Site Entegrasyonu: Harici hafıza dosyasına gerek yoktur, maliyetleri doğrudan ürünler.csv üzerinden bağlar.")
+st.markdown("ASIN/SKU İsim Tercümanı Kodun İçine Gömülmüştür. Maliyet ve Fiyatları Canlı Olarak ürünler.csv Dosyasından Okur.")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -14,21 +14,24 @@ maliyet_file = st.sidebar.file_uploader("1️⃣ ürünler.csv Listesini Seçin"
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
 
 if not maliyet_file or not amazon_files:
-    st.info("💡 Paneli canlandırmak için sol taraftaki menüden **ürünler.csv** dosyanızı ve **Amazon Finans Raporlarınızı** seçin kanka!")
+    st.info("💡 Paneli çalıştırmak için sol menüden **ürünler.csv** dosyanızı ve **Amazon Finans Raporlarınızı** seçin kanka!")
     st.stop()
 
 try:
-    # 1. Maliyet Dosyasını Oku (ürünler.csv)
+    # 1. Ana Maliyet Dosyasını Oku (ürünler.csv)
     try: df_master = pd.read_csv(maliyet_file, encoding='utf-8')
     except:
         try: df_master = pd.read_csv(maliyet_file, encoding='utf-8-sig')
         except: df_master = pd.read_csv(maliyet_file, encoding='latin1')
 
+    # Sütun isimlerindeki gizli boşlukları temizle
     df_master.columns = df_master.columns.str.strip()
+    
+    # Sizin dosyaya özel sütun kontrolü ve temizliği
     df_master = df_master.dropna(subset=['ÜRÜN ADI', 'KDV li Maaliyet'])
     df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
 
-    # Sayısal Dönüştürme Motoru (Format Uyuşmazlığı Koruması)
+    # Sayısal Dönüştürme Motoru (Maliyetlerdeki virgül/nokta krizini çözer)
     def clean_maliyet_num(val):
         if pd.isna(val): return 0.0
         val_str = str(val).replace('TRY','').strip()
@@ -39,10 +42,10 @@ try:
         try: return float(val_str)
         except: return 0.0
 
+    # Gerçek maliyetleri ve satış fiyatlarını sizin ana listenizden (ürünler.csv) canlı okuyoruz!
     df_master['KDV_li_Maliyet_num'] = df_master['KDV li Maaliyet'].apply(clean_maliyet_num)
     df_master['Gercek_Satis_Fiyati_num'] = df_master['GERÇEK SATIŞ FİYATI'].apply(clean_maliyet_num)
 
-    # Akıllı sözlük yapıları ile sitede ultra hızlı eşleştirme
     master_maliyet_dict = df_master.set_index('ÜRÜN ADI_clean')['KDV_li_Maliyet_num'].to_dict()
     master_satis_dict = df_master.set_index('ÜRÜN ADI_clean')['Gercek_Satis_Fiyati_num'].to_dict()
 
@@ -58,14 +61,14 @@ try:
     df_amazon_all = pd.concat(amazon_df_listesi, ignore_index=True)
     df_amazon_all.columns = df_amazon_all.columns.str.strip()
 
-    # Sipariş tekrarlarını önleme koruması
+    # Mükerrer sipariş koruması
     if 'Sipariş No.' in df_amazon_all.columns:
         df_amazon_all = df_amazon_all.drop_duplicates(subset=['Sipariş No.', 'İşlem tipi', 'Ürün Detayları', 'Toplam (TRY)'])
 
     df_amazon_all['Toplam (TRY)'] = pd.to_numeric(df_amazon_all['Toplam (TRY)'], errors='coerce').fillna(0.0)
     df_amazon_all['Toplam ürün fiyatları'] = pd.to_numeric(df_amazon_all['Toplam ürün fiyatları'], errors='coerce').fillna(0.0)
 
-    # 🎯 SİTE İÇİN CANLI HİBRİT EŞLEŞTİRME MOTORU
+    # 🎯 ARKA PLANDAKİ ENTEGRE İSİM TERCÜMANI VE CANLI HİBRİT EŞLEŞTİRME MOTORU
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
     mapping = {}
 
@@ -73,42 +76,41 @@ try:
         search_name = str(name).strip()
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
         
-        # Aşama 1: Birebir Tam İsim Eşleşmesi
+        # 1. Aşama: Harfi harfine birebir tam isim araması
         matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower() == search_name.lower()]
         
-        # Aşama 2: Başlangıç Kontrolü (Amazon'daki '...' kesintilerini yakalar)
+        # 2. Aşama: Başlangıç kontrolü (Amazon'daki üç noktalı yarım isimleri yakalar)
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.startswith(clean_search.lower(), na=False)]
             
-        # Aşama 3: Gelişmiş Kelime Havuzu Kontrolü
+        # 3. Aşama: Gelişmiş içerik araması (İlk 15 karakter güvenlik sınırı)
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.contains(clean_search.lower()[:15], na=False)]
             
         if not matches.empty:
             matched_row = matches.iloc[0]
+            m_name = matched_row['ÜRÜN ADI_clean']
+            # Tercüme bitti! Şimdi fiyatları sizin yüklediğiniz ürünler.csv'den çekiyoruz
             mapping[name] = {
-                'Master_Name': matched_row['ÜRÜN ADI_clean'], 
-                'Maliyet': matched_row['KDV_li_Maliyet_num'],
-                'Tekli_Satis': matched_row['Gercek_Satis_Fiyati_num']
+                'Master_Name': m_name, 
+                'Maliyet': master_maliyet_dict.get(m_name, 0.0),
+                'Tekli_Satis': master_satis_dict.get(m_name, 0.0)
             }
         else:
             mapping[name] = {'Master_Name': "MALİYET LİSTESİNDE BULUNAMADI", 'Maliyet': 0.0, 'Tekli_Satis': 0.0}
 
-    # Finansal Hesaplamalar
+    # Finansal Verileri Ayrıştırma
     df_valid_actions = df_amazon_all[df_amazon_all['İşlem tipi'].isin(['Sipariş Ödemesi', 'Para İadesi'])].copy()
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
     df_valid_actions['Tekli_Satis_Fiyati'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Tekli_Satis'])
 
-    # Akıllı Adet Bulucu Motor
-    def detect_quantity(row):
-        if row['Tekli_Satis_Fiyati'] > 0 and abs(row['Toplam ürün fiyatları']) > 0:
-            return max(1, round(abs(row['Toplam ürün fiyatları']) / row['Tekli_Satis_Fiyati']))
-        return 1
-
-    df_valid_actions['Adet'] = df_valid_actions.apply(detect_quantity, axis=1)
+    # 📦 HASSAS ADET BULUCU MOTOR
+    df_valid_actions['Adet'] = df_valid_actions.apply(
+        lambda r: max(1, round(abs(r['Toplam ürün fiyatları']) / r['Tekli_Satis_Fiyati'])) if r['Tekli_Satis_Fiyati'] > 0 else 1, axis=1
+    )
     
-    # Maliyet ve Net Kar Hesaplama Süzgeci
+    # Siparişe göre kümülatif maliyet ve net kâr hesabı
     df_valid_actions['Toplam_Urun_Maliyeti'] = df_valid_actions.apply(
         lambda row: (row['Birim_Maliyet'] * row['Adet']) if row['İşlem tipi'] == 'Sipariş Ödemesi' else -(row['Birim_Maliyet'] * row['Adet']), axis=1
     )
@@ -140,7 +142,7 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # 📑 SİTE ARAYÜZÜ GÖSTERİMİ
+    # 📑 GÖSTERİM PANELİ ARAYÜZÜ
     st.subheader("📊 Dönemsel Performans Özetiniz")
     kpi1, kpi2, kpi3 = st.columns(3)
     kpi1.metric("💰 Net Hak Ediş (Amazon Pay)", f"{toplam_payout:,.2f} TL")
