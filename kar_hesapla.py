@@ -43,9 +43,9 @@ combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
 # 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU
 # Sütun isimlerini dinamik olarak yakalayalım
-sku_col = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU'] if c in df_mst.columns), df_mst.columns[0])
+sku_col = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU', 'Stok Kodu'] if c in df_mst.columns), df_mst.columns[0])
 asin_col = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_mst.columns), None)
-cost_col = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET'] if c in df_mst.columns), None)
+cost_col = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET', 'KDV li Maliyet'] if c in df_mst.columns), None)
 
 # Eğer özel sütun adları bulunamazsa indekslere göre eşleyelim
 if not cost_col and len(df_mst.columns) > 2:
@@ -59,15 +59,22 @@ total_product_cost = 0.0
 # Sipariş satırları üzerinde dönüp kârı hesaplayalım
 for index, row in combined_amazon.iterrows():
     # Tutar ve Tür sütunlarını esnek yakala
-    amount_val = row.get('amount', row.get('Tutar', row.get('amount_description', 0)))
+    amount_col_name = next((c for c in ['amount', 'Tutar', 'amount_description', 'Total', 'total'] if c in combined_amazon.columns), None)
+    amount_val = row.get(amount_col_name, 0) if amount_col_name else 0.0
+    
     try:
         amount = float(str(amount_val).replace(',', '.'))
     except:
         amount = 0.0
         
-    type_str = str(row.get('type', row.get('Tür', row.get('event_type', '')))).lower()
-    sku_str = str(row.get('seller-sku', row.get('Stok Kodu', ''))).strip().upper()
-    description_str = str(row.get('description', row.get('Ürün Detayları', ''))).strip().upper()
+    type_col_name = next((c for c in ['type', 'Tür', 'event_type', 'Transaction Type'] if c in combined_amazon.columns), None)
+    type_str = str(row.get(type_col_name, '')).lower() if type_col_name else ''
+    
+    sku_col_amz = next((c for c in ['seller-sku', 'Stok Kodu', 'sku'] if c in combined_amazon.columns), None)
+    sku_str = str(row.get(sku_col_amz, '')).strip().upper() if sku_col_amz else ''
+    
+    desc_col_amz = next((c for c in ['description', 'Ürün Detayları', 'product_details'] if c in combined_amazon.columns), None)
+    description_str = str(row.get(desc_col_amz, '')).strip().upper() if desc_col_amz else ''
     
     # 🕵️‍♂️ ASIN Cımbızlama Motoru (Metnin içindeki B0 veya JBM kodlarını ayıklar)
     found_asin = None
@@ -75,9 +82,10 @@ for index, row in combined_amazon.iterrows():
     if asin_match:
         found_asin = asin_match.group(1)
 
-    # Sadece satış ve siparişle ilgili finansal hareketleri alalım
-    if any(x in type_str for x in ['order', 'satış', 'sipariş', 'deal']):
-        if amount > 0:
+    # 🚀 EN ESNEK FİLTRE: Eğer satır boş değilse ve bir para hareketi varsa hesaba kat
+    if amount != 0:
+        # Eğer pozitif bir tutarsa ve sipariş/satış işlemiyse CİRODUR
+        if amount > 0 and (any(x in type_str for x in ['order', 'satış', 'sipariş', 'deal', 'refund', 'iade']) or type_str == ''):
             total_revenue += amount
             
             # Ürünün bizim listemizdeki maliyetini bulalım (Önce ASIN, sonra SKU ile çakıştır)
@@ -96,11 +104,7 @@ for index, row in combined_amazon.iterrows():
                     except:
                         pass
         else:
-            # Amazon kesintileri (Giderler)
-            total_amazon_fees += abs(amount)
-    else:
-        # Genel diğer kesintiler (Depolama, abonelik vb.)
-        if amount < 0:
+            # Negatif tutarlar Amazon'un kestiği komisyon, kargo vs. giderleridir
             total_amazon_fees += abs(amount)
 
 # Nihai Net Kâr Hesabı
