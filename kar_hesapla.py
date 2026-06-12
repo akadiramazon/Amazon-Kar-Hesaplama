@@ -6,7 +6,7 @@ import plotly.express as px
 st.set_page_config(page_title="Amazon Finansal Analiz Paneli", layout="wide")
 
 st.title("🎯 Amazon CEO Finansal Analiz Paneli")
-st.markdown("Amazon raporundaki **Ürün Detayları** ile Maliyet listesindeki **ÜRÜN ADI** birebir nokta atışı eşleştirilir.")
+st.markdown("Amazon raporundaki **Ürün Detayları** ile Maliyet listesindeki **ÜRÜN ADI** birebir nokta atışı ve doğru matematiksel formatta eşleştirilir.")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -36,16 +36,21 @@ try:
     df_master = df_master.dropna(subset=['ÜRÜN ADI', 'KDV li Maaliyet'])
     df_master['ÜRÜN ADI_clean'] = df_master['ÜRÜN ADI'].astype(str).str.strip()
 
-    # Sayısal Değerleri Temizleme Fonksiyonu
-    def clean_num(val):
+    # MALİYET İÇİN VİRGÜLÜ NOKTAYA ÇEVİRME MOTORU
+    def clean_maliyet_num(val):
         if pd.isna(val): return 0.0
-        val_str = str(val).replace('.', '').replace(',', '.').replace('TRY','').strip()
+        val_str = str(val).replace('TRY','').strip()
+        # Eğer binlik ayırıcı nokta, kuruş virgül ise (Örn: 1.664,00)
+        if ',' in val_str and '.' in val_str:
+            val_str = val_str.replace('.', '').replace(',', '.')
+        elif ',' in val_str:
+            val_str = val_str.replace(',', '.')
         try: 
             return float(val_str)
         except: 
             return 0.0
 
-    df_master['KDV_li_Maliyet_num'] = df_master['KDV li Maaliyet'].apply(clean_num)
+    df_master['KDV_li_Maliyet_num'] = df_master['KDV li Maaliyet'].apply(clean_maliyet_num)
     
     # 2. Amazon Finans Dosyalarını Birleştir
     amazon_df_listesi = []
@@ -66,33 +71,16 @@ try:
     if 'Sipariş No.' in df_amazon_all.columns:
         df_amazon_all = df_amazon_all.drop_duplicates(subset=['Sipariş No.', 'İşlem tipi', 'Ürün Detayları', 'Toplam (TRY)'])
 
-    # Sütun isimlerindeki büyük/küçük harf uyuşmazlığını çözüyoruz
-    # 'Miktar' sütununu 'miktar_clean' olarak normalize et
-    miktar_col = [c for c in df_amazon_all.columns if c.lower() == 'miktar']
-    if miktar_col:
-        df_amazon_all['miktar_clean'] = pd.to_numeric(df_amazon_all[miktar_col[0]], errors='coerce').fillna(1)
+    # AMAZON İÇİN NOKTASAL HASSASİYET MOTORU
+    df_amazon_all['Toplam (TRY)'] = pd.to_numeric(df_amazon_all['Toplam (TRY)'], errors='coerce').fillna(0.0)
+    df_amazon_all['Toplam ürün fiyatları'] = pd.to_numeric(df_amazon_all['Toplam ürün fiyatları'], errors='coerce').fillna(0.0)
+
+    # Miktar Sütunu Standardizasyonu
+    stok_col_amz = [c for c in df_amazon_all.columns if c.lower() == 'miktar']
+    if stok_col_amz:
+        df_amazon_all['miktar_clean'] = pd.to_numeric(df_amazon_all[stok_col_amz[0]], errors='coerce').fillna(1)
     else:
         df_amazon_all['miktar_clean'] = 1
-
-    # Sayısal alanları temizle
-    df_amazon_all['Toplam (TRY)'] = df_amazon_all['Toplam (TRY)'].apply(clean_num)
-
-    # 📅 TARİH SÜTUNU AYARLAMA
-    date_col = 'Tarih' if 'Tarih' in df_amazon_all.columns else ('Tarih/Saat' if 'Tarih/Saat' in df_amazon_all.columns else None)
-    if date_col:
-        df_amazon_all['Clean_Date'] = df_amazon_all[date_col].astype(str).str.split(' ').str[0]
-        df_amazon_all['Clean_Date'] = pd.to_datetime(df_amazon_all['Clean_Date'], format='%d.%m.%Y', errors='coerce')
-        
-        min_date = df_amazon_all['Clean_Date'].min()
-        max_date = df_amazon_all['Clean_Date'].max()
-        
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📅 Zaman Filtresi")
-        selected_dates = st.sidebar.date_input("Analiz Aralığı Seçin", [min_date, max_date], min_value=min_date, max_value=max_date)
-        
-        if len(selected_dates) == 2:
-            start_date, end_date = selected_dates
-            df_amazon_all = df_amazon_all[(df_amazon_all['Clean_Date'] >= pd.to_datetime(start_date)) & (df_amazon_all['Clean_Date'] <= pd.to_datetime(end_date))]
 
     # 🎯 %100 NOKTA ATIŞI TEKLİ EŞLEŞTİRME MOTORU
     unique_amazon_names = df_amazon_all['Ürün Detayları'].dropna().unique()
@@ -115,7 +103,6 @@ try:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.contains(kisa_baslangic, regex=False, na=False)]
             
         if not matches.empty:
-            # Kaç tane bulursa bulsun, sadece İLK VE EN DOĞRU satırı bağla (Çoklu ürün eşleşme hatasını bitirir)
             matched_row = matches.iloc[0]
             mapping[name] = {
                 'Master_Name': matched_row['ÜRÜN ADI_clean'], 
@@ -129,7 +116,7 @@ try:
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
 
-    # 📦 GERÇEK ADET KONTROLÜ (Artık hatasız, temizlenmiş sütundan çekiyor)
+    # 📦 GERÇEK ADET KONTROLÜ
     df_valid_actions['Adet'] = df_valid_actions['miktar_clean'].abs()
     
     # Toplam Maliyet Hesabı (Sipariş Ödemesinde normal, Para İadesinde eksi maliyet olarak yansır)
@@ -147,7 +134,7 @@ try:
         Net_Temiz_Kar=('Net_Kar', 'sum')
     ).reset_index()
 
-    # Satış ve İade adetlerini doğrudan rapordan süzme
+    # Satış ve İade adetlerini süzme
     def get_detailed_qtys(r):
         s_adet = df_valid_actions[(df_valid_actions['Ürün Detayları'] == r['Ürün Detayları']) & (df_valid_actions['İşlem tipi'] == 'Sipariş Ödemesi')]['Adet'].sum()
         i_adet = df_valid_actions[(df_valid_actions['Ürün Detayları'] == r['Ürün Detayları']) & (df_valid_actions['İşlem tipi'] == 'Para İadesi')]['Adet'].sum()
@@ -165,7 +152,7 @@ try:
         'Net_Temiz_Kar': 'Net Temiz Kâr (TRY)'
     })
 
-    # Genel Toplam Hesapları
+    # Genel Toplam Hesapları (Kuruşu kuruşuna gerçek payout)
     toplam_payout = df_amazon_all['Toplam (TRY)'].sum()
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
