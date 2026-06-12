@@ -66,9 +66,16 @@ try:
     if 'Sipariş No.' in df_amazon_all.columns:
         df_amazon_all = df_amazon_all.drop_duplicates(subset=['Sipariş No.', 'İşlem tipi', 'Ürün Detayları', 'Toplam (TRY)'])
 
+    # Sütun isimlerindeki büyük/küçük harf uyuşmazlığını çözüyoruz
+    # 'Miktar' sütununu 'miktar_clean' olarak normalize et
+    miktar_col = [c for c in df_amazon_all.columns if c.lower() == 'miktar']
+    if miktar_col:
+        df_amazon_all['miktar_clean'] = pd.to_numeric(df_amazon_all[miktar_col[0]], errors='coerce').fillna(1)
+    else:
+        df_amazon_all['miktar_clean'] = 1
+
     # Sayısal alanları temizle
     df_amazon_all['Toplam (TRY)'] = df_amazon_all['Toplam (TRY)'].apply(clean_num)
-    df_amazon_all['miktar'] = pd.to_numeric(df_amazon_all['miktar'], errors='coerce').fillna(1) # Eğer miktar sütunu yoksa varsayılan 1
 
     # 📅 TARİH SÜTUNU AYARLAMA
     date_col = 'Tarih' if 'Tarih' in df_amazon_all.columns else ('Tarih/Saat' if 'Tarih/Saat' in df_amazon_all.columns else None)
@@ -122,8 +129,8 @@ try:
     df_valid_actions['Gercek_Urun_Adi'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Master_Name'])
     df_valid_actions['Birim_Maliyet'] = df_valid_actions['Ürün Detayları'].map(lambda x: mapping[x]['Maliyet'])
 
-    # 📦 GERÇEK ADET KONTROLÜ (Doğrudan rapordaki miktar sütununu kullanıyoruz)
-    df_valid_actions['Adet'] = df_valid_actions['miktar'].abs()
+    # 📦 GERÇEK ADET KONTROLÜ (Artık hatasız, temizlenmiş sütundan çekiyor)
+    df_valid_actions['Adet'] = df_valid_actions['miktar_clean'].abs()
     
     # Toplam Maliyet Hesabı (Sipariş Ödemesinde normal, Para İadesinde eksi maliyet olarak yansır)
     df_valid_actions['Toplam_Urun_Maliyeti'] = df_valid_actions.apply(
