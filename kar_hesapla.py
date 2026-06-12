@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import re
 
-# 🌟 PREMIUM GÖRSEL DÜZEN VE SADELİK AYARI
+# 🌟 SADELİK VE NETLİK AYARI
 st.set_page_config(page_title="Amazon CEO Kâr Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO Net Kâr ve Finansal Analiz Paneli")
@@ -41,7 +41,7 @@ if not amazon_df_list:
 
 combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
-# 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU (DOKUNULMADI - %100 AYNI)
+# 🧮 NET KÂR HESAPLAMA VE MATEMATİK MOTORU (ORİJİNAL - ASLA DOKUNULMADI)
 sku_col = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU', 'Stok Kodu'] if c in df_mst.columns), df_mst.columns[0])
 asin_col = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_mst.columns), None)
 cost_col = next((c for c in ['KDV li Maaliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET', 'KDV li Maliyet'] if c in df_mst.columns), None)
@@ -99,8 +99,8 @@ for index, row in combined_amazon.iterrows():
 net_profit = total_revenue - total_amazon_fees - total_product_cost
 profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
-# 📈 DEV GÖRSEL ÖZET KUTULARI (DÜZENLENDİ VE GÜZELLEŞTİRİLDİ)
-st.subheader("💰 Bu Dönemin Finansal Özet Kartları")
+# 📈 DEV GÖRSEL ÖZET KUTULARI
+st.subheader("💰 Bu Dönemin Finansal Net Raporu")
 kp1, kp2, kp3, kp4 = st.columns(4)
 with kp1:
     st.metric("💵 Toplam Net Ciro", f"{total_revenue:,.2f} TL")
@@ -135,32 +135,13 @@ with col_grafik2:
 
 st.markdown("---")
 
-# 🎯 YENİLİK: AKILLI ÜRÜN ARAMA VE ÖZEL ÜRÜN KARTI (TEMEL MOTORU ASLA ETKİLEMEZ)
-st.subheader("🔍 Akıllı Ürün Maliyet Arama")
-arama_kelimesi = st.text_input("Tabloda kaybolma! Maliyetini merak ettiğin ürünün Stok Kodunu (SKU) veya adını yaz kanka:", "", placeholder="Örn: Supra, Pelikan, Stok Kodu...")
-
-if arama_kelimesi:
-    # Kullanıcının maliyet tablosunda esnek arama yapıyoruz
-    arama_sonucu = df_mst[
-        df_mst[sku_col].astype(str).str.contains(arama_kelimesi, case=False) |
-        (df_mst['ÜRÜN ADI'].astype(str).str.contains(arama_kelimesi, case=False) if 'ÜRÜN ADI' in df_mst.columns else False) |
-        (df_mst[asin_col].astype(str).str.contains(arama_kelimesi, case=False) if asin_col else False)
-    ]
-    
-    if not arama_sonucu.empty:
-        ilk_urun = arama_sonucu.iloc[0]
-        st.success(f"📦 **Bulunan Ürün:** {ilk_urun.get('ÜRÜN ADI', ilk_urun.get(sku_col, 'Ürün Tanımsız'))}")
-        
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("💰 Ürün Maliyeti", f"{ilk_urun.get(cost_col, '0')} TL")
-        with c2:
-            st.metric("📈 Satış Fiyatı", f"{ilk_urun.get('SATIŞ FİYATI\\n(KDV DAHİL)', ilk_urun.get('SATIŞ FİYATI (KDV DAHİL)', '-'))} TL")
-        with c3:
-            st.metric("🔑 ASIN / SKU", f"{ilk_urun.get(sku_col, '-')}")
-    else:
-        st.warning("Kanka aradığın kelimeye veya koda ait bir ürün senin maliyet listende bulunamadı.")
-
-st.markdown("---")
+# 🔍 EN BASİT VE SIFIR HATA GÖTÜREN ARAMA SEÇENEĞİ
 st.subheader("📋 Detaylı Ürün Takip Tablosu")
-st.dataframe(df_mst, use_container_width=True)
+arama_metni = st.text_input("💡 Tablo içinde arama yapmak için buraya Stok Kodu (SKU) veya kelime yaz kanka:", "")
+
+if arama_metni:
+    # Sadece ekrandaki tabloyu filtreliyoruz, ana hesaplama motoruna zerre etkimiz yok!
+    filtreli_df = df_mst[df_mst.astype(str).apply(lambda x: x.str.contains(arama_metni, case=False)).any(axis=1)]
+    st.dataframe(filtreli_df, use_container_width=True)
+else:
+    st.dataframe(df_mst, use_container_width=True)
