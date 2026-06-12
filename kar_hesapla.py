@@ -20,7 +20,7 @@ live_stock_file = st.sidebar.file_uploader("3️⃣ Canlı Amazon Stok Raporunu 
 
 # TEMEL DOSYALAR YOKSA KILAVUZ GÖSTERİR VE DURUR
 if not maliyet_file or not amazon_files:
-    st.info("💡 Paneli canlandırmak için sol taraftaki menüden **Maliyet Çizelgeninizi** ve **Amazon Finans Raporlarınızı** seçin kanka!")
+    st.info("💡 Paneli canlandırmak için sol taraftaki menüden **Maliyet Çizelgenizi** ve **Amazon Finans Raporlarınızı** seçin kanka!")
     st.stop()
 
 # DOSYALAR GELDİYSE ANA MOTOR ÇALIŞIR
@@ -35,8 +35,7 @@ try:
     # Sütun isimlerini temizle
     df_master.columns = df_master.columns.str.strip()
     
-    # 🎯 SENİN EXCELİNDEKİ SÜTUNLARA GÖRE KİLİTLEME MOTORU
-    # Dosyandaki 'KDV li Maaliyet' başlığını şak diye yakalamak için listeye ekledik kanka
+    # Senin excelindeki 'KDV li Maaliyet' başlığını şak diye yakalamak için kilitledik kanka
     sku_col_master = next((c for c in ['Stok Kodu (SKU)', 'BARKOD_SKU', 'SKU', 'Stok Kodu'] if c in df_master.columns), df_master.columns[0])
     asin_col_master = next((c for c in ['ASIN', 'ASIN Kodu'] if c in df_master.columns), None)
     cost_col_master = next((c for c in ['KDV li Maaliyet', 'KDV\'li Maliyet', 'KDV DAHİL MALİYET', 'TOPLAM MALİYET', 'KDV li Maliyet'] if c in df_master.columns), None)
@@ -84,15 +83,16 @@ try:
         
     df_amazon_raw = pd.concat(amazon_df_list, ignore_index=True)
     
-    # Amazon Raporu Sütun Standartlaştırma
+    # 🎯 YENİLİK: ULTRA ESNEK VE BÜYÜK/KÜÇÜK HARFE DUYARSIZ SÜTUN BULUCU
     amz_cols = df_amazon_raw.columns.tolist()
-    type_col = next((c for c in amz_cols if c.lower() in ['type', 'tür', 'işlem türü', 'transaction type', 'event_type']), None)
-    amount_col = next((c for c in amz_cols if c.lower() in ['amount', 'tutar', 'total', 'toplam', 'fiyat', 'price']), None)
-    sku_col = next((c for c in amz_cols if c.lower() in ['seller-sku', 'stok kodu', 'sku', 'ürün kodu']), None)
-    desc_col = next((c for c in amz_cols if c.lower() in ['description', 'ürün detayları', 'açıklama', 'product details']), None)
+    
+    type_col = next((c for c in amz_cols if c.lower() in ['tür', 'type', 'işlem türü', 'transaction type', 'event_type', 'tür ']), None)
+    amount_col = next((c for c in amz_cols if c.lower() in ['toplam', 'amount', 'tutar', 'amount_description', 'total', 'total ', 'toplam ', 'fatura tutarı']), None)
+    sku_col = next((c for c in amz_cols if c.lower() in ['sku', 'seller-sku', 'stok kodu', 'sku ', 'stok kodu ']), None)
+    desc_col = next((c for c in amz_cols if c.lower() in ['açıklama', 'description', 'ürün detayları', 'product details', 'açıklama ']), None)
     
     if not type_col or not amount_col:
-        st.error("Amazon finans raporunda 'Tür' (Type) veya 'Tutar' (Amount) sütunları tespit edilemedi kanka!")
+        st.error(f"Kanka sütun eşleşmesi başarısız oldu! Rapordaki mevcut sütunlar şunlar: {amz_cols}. Lütfen kontrol et.")
         st.stop()
         
     # Amazon Sayı Temizliği (Orijinal Yapın)
@@ -126,7 +126,7 @@ try:
         if match_jbm:
             return match_jbm.group(0)
             
-        if sku and sku != 'NAN':
+        if sku and sku != 'NAN' and sku != '':
             return sku
             
         return None
@@ -148,7 +148,7 @@ try:
         if amt == 0:
             continue
             
-        if amt > 0 and (any(x in t_type for x in ['order', 'satış', 'sipariş', 'deal', 'payment']) or t_type == 'nan' or t_type == ''):
+        if amt > 0 and (any(x in t_type for x in ['order', 'satış', 'sipariş', 'deal', 'payment', 'fatura']) or t_type == 'nan' or t_type == ''):
             total_revenue += amt
             
             maliyet_row = pd.DataFrame()
