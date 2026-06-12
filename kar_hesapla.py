@@ -8,12 +8,14 @@ st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 # 🎨 PREMIUM GÖZ YORMAYAN GECELER TEMASI (SAF CSS DARK MODE)
 st.markdown("""
     <style>
+    /* Global Karanlık Arka Plan ve Yazı Rengi */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
         background-color: #121212 !important;
         color: #e0e0e0 !important;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
+    /* Sol Kenar Menüsünün (Sidebar) Karanlığa Gömülmesi */
     [data-testid="stSidebar"] {
         background-color: #1e1e1e !important;
         border-right: 1px solid #2d2d2d;
@@ -22,6 +24,7 @@ st.markdown("""
         color: #e0e0e0 !important;
     }
     
+    /* Sekme (Tabs) Renklerinin Karanlık Mod Ayarı */
     button[data-testid="stMarkdownContainer"] {
         color: #e0e0e0 !important;
     }
@@ -38,6 +41,7 @@ st.markdown("""
         font-weight: bold !important;
     }
     
+    /* Minimalist ve Şık Gece Modu KPI Kartları kanka */
     .kpi-container {
         background-color: #1e1e1e;
         padding: 20px;
@@ -66,6 +70,7 @@ st.markdown("""
         color: #ffffff;
     }
     
+    /* Karanlık Tablo Çerçeve Düzenlemesi */
     [data-testid="stDataFrame"] {
         border: 1px solid #2d2d2d !important;
         border-radius: 10px;
@@ -73,6 +78,7 @@ st.markdown("""
         background-color: #1e1e1e !important;
     }
     
+    /* Bilgilendirme Kutularının Rengini Yumuşatma */
     .stAlert {
         background-color: #1e1e1e !important;
         color: #e0e0e0 !important;
@@ -82,7 +88,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("🧠 **Yapay Zekâ Tabanlı Eşleştirme & Akıllı Depo/Stok Kalkanı Aktif.** Finansal Kokpite Hoş Geldin kanka!")
+st.markdown("🧠 **Yapay Zekâ Tabanlı Eşleştirme & Envanter Tazminat Takip Motoru Aktif.** Finansal Kokpite Hoş Geldin kanka!")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
@@ -274,17 +280,19 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # ⭐ SOFT VE ELİT YAZI STİLLERİ
+    # ⭐ SOFT VE ELİT YAZI STİLLERİ (Gözü asla yormayan kurumsal tonlar)
     def hakedis_stil(val):
-        return 'color: #90caf9; font-weight: 600;' if val > 0 else ''
+        return 'color: #90caf9; font-weight: 600;' if val > 0 else '' # Soft Pastel Mavi
 
     def kar_ve_roi_stil(val):
-        if val > 0: return 'color: #a5d6a7; font-weight: bold;'
-        elif val < 0: return 'color: #ef9a9a; font-weight: bold;'
+        if val > 0:
+            return 'color: #a5d6a7; font-weight: bold;' # Yumuşak Pastel Yeşil
+        elif val < 0:
+            return 'color: #ef9a9a; font-weight: bold;' # Yumuşak Pastel Kırmızı
         return ''
 
-    # 📑 SEKMELİ GÖSTERİM MERKEZİ (3. SEKME ENJEKTE EDİLDİ kanka!)
-    sekme1, sekme2, sekme3 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi", "📦 FBA Stok & Depolama Takibi"])
+    # 📑 SEKMELİ GÖSTERİM MERKEZİ
+    sekme1, sekme2 = st.tabs(["💰 Ana Finans Paneli", "📉 İade Analiz Merkezi"])
 
     with sekme1:
         st.subheader("📊 Dönemsel Performans Özetiniz")
@@ -305,11 +313,14 @@ try:
         st.markdown("---")
         st.subheader("📋 Kurumsal Finans Raporu Tablosu")
         
+        # Arka planda sayıları renklendiren minimalist motorumuz kanka
         try:
             styled_df = product_summary_show.style.map(kar_ve_roi_stil, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_stil, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
         except:
             styled_df = product_summary_show.style.applymap(kar_ve_roi_stil, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).applymap(hakedis_stil, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
 
+        # 👑 EN KRAL GÖRSEL ÖZELLİK: ROI ve Kâr Marjı arkasına soft veri barları çakıyoruz!
+        # Hem ayırt edici hem de gözü sıfır yoran elit SaaS görüntüsü kanka
         st.dataframe(
             styled_df,
             column_config={
@@ -319,8 +330,14 @@ try:
             use_container_width=True
         )
 
+        # CSV İndirme Butonu
         csv_data = product_summary_show.to_csv(index=False).encode('utf-8')
-        st.download_button(label="📥 Kusursuz Kârlılık Raporunu İndir", data=csv_data, file_name='amazon_kesin_kar_raporu.csv', mime='text/csv')
+        st.download_button(
+            label="📥 Kusursuz Kârlılık Raporunu İndir",
+            data=csv_data,
+            file_name='amazon_kesin_kar_raporu.csv',
+            mime='text/csv',
+        )
 
         df_bulunamayanlar = product_summary_show[(product_summary_show['Sizin Listede Eşleşen Adı'] == "MALİYET LİSTESİNDE BULUNAMADI")]
         if not df_bulunamayanlar.empty:
@@ -334,57 +351,19 @@ try:
         
         if not df_iade_grafik.empty:
             fig = px.bar(
-                df_iade_grafik.head(15), x='Gercek_Urun_Adi', y='İade Adedi', title='🔥 En Çok İade Alan Top 15 Ürününüz',
+                df_iade_grafik.head(15),
+                x='Gercek_Urun_Adi',
+                y='İade Adedi',
+                title='🔥 En Çok İade Alan Top 15 Ürününüz',
                 labels={'Gercek_Urun_Adi': 'Ürün Adı', 'İade Adedi': 'İade Edilen Adet'},
-                color='İade Oranı (%)', color_continuous_scale='Reds', template='plotly_dark'
+                color='İade Oranı (%)',
+                color_continuous_scale='Reds',
+                template='plotly_dark'
             )
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(df_iade_grafik[['Ürün Detayları', 'Gercek_Urun_Adi', 'Satış Adedi', 'İade Adedi', 'İade Oranı (%)']], use_container_width=True)
         else:
             st.success("🎉 Ne güzel kanka! Seçili dönemde hiç iade işleminiz bulunmuyor.")
-
-    # 📦 SEKME 3: AKILLI DEPO KALKANI VE STOK ÖMRÜ MODÜLÜ kanka
-    with sekme3:
-        st.subheader("📦 FBA Depo Sağlığı ve Tahmini Stok Ömrü Analizi")
-        st.markdown("Bu panel, Amazon raporlarınızdaki satış hızınızı hesaplayarak, girdiğiniz mevcut stok miktarının **kaç gün yeteceğini** simüle eder kanka.")
-        
-        # Gerçek envanter kalemlerini listele (Tazminat satırlarını lojistikte eliyoruz)
-        df_stok_base = product_summary[product_summary['Gercek_Urun_Adi'] != "AMAZON LOJİSTİK ENVANTER TAZMİNATI"].copy()
-        
-        if not df_stok_base.empty:
-            # 14 günlük standart rapor periyodu kabul edilerek günlük satış hızını buluyoruz kanka
-            df_stok_base['Günlük Satış Hızı (Adet)'] = (df_stok_base['Net Satış Adedi'] / 14.0).clip(lower=0.01) # Sıfıra bölünmeyi önler kanka
-            
-            # Kolaylık olsun diye default (varsayılan) eldeki stok miktarını 30 adet tanımlayalım
-            df_stok_base['Mevcut Tahmini Stok (FBA)'] = 30
-            
-            # Dinamik Hesaplama Çarkı
-            df_stok_base['Tahmini Stok Ömrü (Gün)'] = (df_stok_base['Mevcut Tahmini Stok (FBA)'] / df_stok_base['Günlük Satış Hızı (Adet)']).round(0)
-            
-            df_stok_show = df_stok_base[['Gercek_Urun_Adi', 'Net Satış Adedi', 'Günlük Satış Hızı (Adet)', 'Mevcut Tahmini Stok (FBA)', 'Tahmini Stok Ömrü (Gün)']].rename(columns={
-                'Gercek_Urun_Adi': 'Ürün Adı', 'Net Satış Adedi': 'Dönem Net Satışı', 'Günlük Satış Hızı (Adet)': 'Günlük Satış Hızı (Adet)'
-            })
-            
-            # Kibar ve göz yormayan mavi tonlu veri barlarıyla kalan günleri listeliyoruz kanka
-            st.dataframe(
-                df_stok_show.style.format({'Günlük Satış Hızı (Adet)': '{:.2f}'}),
-                column_config={
-                    "Tahmini Stok Ömrü (Gün)": st.column_config.ProgressColumn(
-                        "Tahmini Stok Ömrü (Kalan Gün)",
-                        help="Bu ürünün eldeki stoğunun tükenmesine kalan tahmini gün sayısı kanka",
-                        format="%d Gün", min_value=0, max_value=120, color="blue"
-                    )
-                },
-                use_container_width=True
-            )
-            
-            # Akıllı Uyarı Sistemi
-            st.markdown("---")
-            st.markdown("### 💡 Akıllı Depo Operasyon Tüyoları:")
-            st.info("📌 **Depolama Ücreti Riski (Ömür > 45 Gün):** Kalan gün sayısı 45'in üzerinde olan ürünler Amazon deposunda yavaş dönüyor demektir kanka. Yüksek FBA depo ücreti yememek için bu ürünlerin reklamını hafif artırabilir veya fiyatta ufak bir esneme yapabilirsin.")
-            st.warning("🚨 **Stoksuz Kalma Riski (Ömür < 15 Gün):** Kalan gün sayısı 15'in altına düşen ürünlerde 'Out of Stock' tehlikesi kapıda! Samsun-İstanbul hattındaki ara depodan veya tedarikçinden acilen FBA ambarına sevkiyat planlamalısın.")
-        else:
-            st.info("💡 Stok ömrünü analiz edebilmek için lütfen önce finansal raporlarınızı yükleyin kanka!")
 
 except Exception as e:
     st.error(f"🚨 Sistem Hatası: {e}")
