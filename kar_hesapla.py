@@ -5,44 +5,43 @@ import pandas as pd
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
 st.title("🎯 Amazon CEO %100 Nokta Atışı Finansal Analiz Paneli")
-st.markdown("Güncel Temiz Maliyet Altyapısı Aktiftir. Genişmaliyet dosyası sistemden tamamen çıkarılmıştır kanka.")
+st.markdown("Geniş Maliyet Altyapısı Aktiftir. Sistem doğrudan genişmaliyet formatı ve Amazon Raporu üzerinden çalışır.")
 st.markdown("---")
 
 # 📊 DOSYA YÜKLEME ALANLARI (SOL MENÜ)
 st.sidebar.header("📦 Veri Yükleme Merkezi")
-maliyet_file = st.sidebar.file_uploader("1️⃣ maliyet_revize_son.csv Listesini Seçin", type=["csv"], key="maliyet")
+genis_file = st.sidebar.file_uploader("1️⃣ Geniş Maliyet Listesini Seçin (revize_genis_maliyet.csv)", type=["csv"], key="genis")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Finans Raporlarını Seçin (Çoklu Seçilebilir)", type=["csv"], accept_multiple_files=True, key="amazon")
 
-if not maliyet_file or not amazon_files:
+if not genis_file or not amazon_files:
     st.info("💡 **Kanka paneli çalıştırmak için sol menüden sırasıyla:**\n"
-            "1. Fiyatları eklediğimiz o en güncel ve temiz **maliyet_revize_son.csv** dosyanı,\n"
+            "1. Bilgisayarda ürettiğimiz o en doğru isimli **revize_genis_maliyet.csv** dosyanı,\n"
             "2. Amazon'dan indirdiğin günlük/haftalık **Finans Raporlarını** yükle.")
     st.stop()
 
 try:
-    # 1. Ana Maliyet Dosyasını Oku (maliyet_revize_son.csv)
-    try: df_master = pd.read_csv(maliyet_file, encoding='utf-8')
+    # 1. Geniş Maliyet Dosyasını Oku
+    try: df_master = pd.read_csv(genis_file, encoding='utf-8')
     except:
-        try: df_master = pd.read_csv(maliyet_file, encoding='utf-8-sig')
-        except: df_master = pd.read_csv(maliyet_file, encoding='latin1')
+        try: df_master = pd.read_csv(genis_file, encoding='utf-8-sig')
+        except: df_master = pd.read_csv(genis_file, encoding='latin1')
 
     # Sütun isimlerindeki gizli boşlukları ve alt satır karakterlerini temizle
     df_master.columns = df_master.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
     
-    # Senin en güncel temiz dökümanındaki sütun isimleri
-    urun_adi_col = "Sizin Listedeki Ürün Adı"
+    # Sitenin aradığı o orijinal 32 sütunlu genişmaliyet başlıkları
+    urun_adi_col = "ÜRÜN ADI"
     maliyet_col = "KDV li Maaliyet"
     satis_col = "GERÇEK SATIŞ FİYATI"
 
-    # Güvenlik Kontrolü
     if urun_adi_col not in df_master.columns or maliyet_col not in df_master.columns:
-        st.error(f"🚨 HATA: Dosyada '{urun_adi_col}' veya '{maliyet_col}' sütunu bulunamadı! Lütfen fiyatları eklediğimiz o güncel listeyi yükleyin kanka.")
+        st.error(f"🚨 HATA: Yüklediğiniz dosyada '{urun_adi_col}' veya '{maliyet_col}' sütunu bulunamadı! Lütfen ürettiğimiz 'revize_genis_maliyet.csv' dosyasını yükleyin kanka.")
         st.stop()
 
     df_master = df_master.dropna(subset=[urun_adi_col, maliyet_col])
     df_master['ÜRÜN ADI_clean'] = df_master[urun_adi_col].astype(str).str.strip()
 
-    # Sayısal Dönüştürme Motoru (Maliyetlerdeki virgül/nokta krizini çözer)
+    # Sayısal Dönüştürme Motoru
     def clean_maliyet_num(val):
         if pd.isna(val): return 0.0
         val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
@@ -53,7 +52,6 @@ try:
         try: return float(val_str)
         except: return 0.0
 
-    # Gerçek maliyetleri ve satış fiyatlarını temiz master listenden okuyoruz!
     df_master['KDV_li_Maliyet_num'] = df_master[maliyet_col].apply(clean_maliyet_num)
     df_master['Gercek_Satis_Fiyati_num'] = df_master[satis_col].apply(clean_maliyet_num) if satis_col in df_master.columns else df_master['KDV_li_Maliyet_num']
 
@@ -72,7 +70,7 @@ try:
     df_amazon_all = pd.concat(amazon_df_listesi, ignore_index=True)
     df_amazon_all.columns = df_amazon_all.columns.str.replace('\n', ' ').str.replace('\r', '').str.strip()
 
-    # ⭐⭐ ULTRA GÜVENLİ SÜTUN BULUCU KALKAN ⭐⭐
+    # ⭐⭐ AKILLI SÜTUN YAKALAYICI KALKAN ⭐⭐
     toplam_cols = [col for col in df_amazon_all.columns if 'toplam' in col.lower() or 'total' in col.lower()]
     target_toplam_col = toplam_cols[0] if toplam_cols else df_amazon_all.columns[-1]
 
@@ -82,11 +80,9 @@ try:
     tip_cols = [col for col in df_amazon_all.columns if 'tip' in col.lower() or 'tür' in col.lower() or 'type' in col.lower() or 'işlem' in col.lower() or 'durum' in col.lower() or 'açıklama' in col.lower()]
     target_tip_col = tip_cols[0] if tip_cols else None
 
-    # Mükerrer sipariş koruması
     if 'Sipariş No.' in df_amazon_all.columns:
         df_amazon_all = df_amazon_all.drop_duplicates(subset=['Sipariş No.', target_toplam_col])
 
-    # Sayısal para temizliği
     def clean_amazon_money(val):
         if pd.isna(val): return 0.0
         val_str = str(val).replace('TRY','').replace('TL','').replace(' ','').strip()
@@ -99,13 +95,11 @@ try:
 
     df_amazon_all['Clean_Toplam'] = df_amazon_all[target_toplam_col].apply(clean_amazon_money)
     
-    # Rapor başlıklarında 'Toplam ürün fiyatları' veya benzerini yakala
     fiyat_urun_cols = [col for col in df_amazon_all.columns if 'ürün fiyat' in col.lower() or 'product price' in col.lower()]
     target_urun_fiyat_col = fiyat_urun_cols[0] if fiyat_urun_cols else 'Toplam ürün fiyatları'
-    
     df_amazon_all['Clean_Urun_Fiyatlari'] = df_amazon_all[target_urun_fiyat_col].apply(clean_amazon_money) if target_urun_fiyat_col in df_amazon_all.columns else df_amazon_all['Clean_Toplam']
 
-    # 🎯 ULTRA HASSAS VE AKILLI İSİM EŞLEŞTİRME MOTORU (2. Aşama)
+    # 🎯 ULTRA HASSAS İSİMLE EŞLEŞTİRME YAPAY ZEKÂ MOTORU
     unique_amazon_names = df_amazon_all[target_detay_col].dropna().unique()
     mapping = {}
 
@@ -113,19 +107,13 @@ try:
         search_name = str(name).strip()
         clean_search = search_name[:-3].strip() if search_name.endswith('...') else search_name
         
-        # 1. Aşama: Harfi harfine birebir tam isim araması
         matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower() == search_name.lower()]
-        
-        # 2. Aşama: Başlangıç kontrolü (Üç noktalı kesik isimler için)
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.startswith(clean_search.lower(), na=False)]
-        
-        # 3. Aşama: Kelime havuzu kontrolü
         if matches.empty:
             matches = df_master[df_master['ÜRÜN ADI_clean'].str.lower().str.contains(clean_search.lower()[:20], na=False)]
             
         if not matches.empty:
-            # Varyasyon koruması: En yakın karakter uzunluğundaki doğru ürünü seç!
             if len(matches) > 1:
                 matches = matches.copy()
                 matches['len_diff'] = (matches['ÜRÜN ADI_clean'].str.len() - len(clean_search)).abs()
@@ -212,7 +200,7 @@ try:
     st.success(f"🔥 SEÇİLİ DÖNEM NET TEMİZ KÂR: {final_net_kar:,.2f} TL")
 
     st.markdown("---")
-    st.subheader("📋 %100 Nokta Atışı Kârlılık Raporu")
+    st.subheader("📋 %100 Kesin Eşleşmeli Kârlılık Raporu")
     st.dataframe(product_summary_show, use_container_width=True)
 
     csv_data = product_summary_show.to_csv(index=False).encode('utf-8')
