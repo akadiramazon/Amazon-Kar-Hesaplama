@@ -2,13 +2,12 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# 🌟 ESKİ SADE VE NET DÜZEN
 st.set_page_config(page_title="Amazon Finansal Analiz", layout="wide")
 
 st.title("🎯 Amazon Finansal Analiz ve Net Kâr Paneli")
 st.markdown("---")
 
-# 📊 YAN MENÜ (SADECE MALIYET VE AMAZON RAPORLARI)
+# 📊 YAN MENÜ
 st.sidebar.header("📦 Rapor Yükleme Merkezi")
 maliyet_file = st.sidebar.file_uploader("1️⃣ Maliyet Çizelgenizi Seçin (.csv)", type=["csv"], key="maliyet")
 amazon_files = st.sidebar.file_uploader("2️⃣ Amazon Tarih Raporlarını Seçin (.csv)", type=["csv"], accept_multiple_files=True, key="amazon")
@@ -41,14 +40,13 @@ if not amazon_df_list:
 
 combined_amazon = pd.concat(amazon_df_list, ignore_index=True)
 
-# 🧮 ESKİ ÇALIŞAN MATEMATİK MOTORU
+# 🧮 İLK GÜNKÜ ASIL MATEMATİK MOTORU
 total_revenue = 0.0
 total_amazon_fees = 0.0
 total_product_cost = 0.0
 
 # Sipariş satırları üzerinde dönüp kârı hesaplayalım
 for index, row in combined_amazon.iterrows():
-    # Tutar ve Tür alanlarını temiz çekelim
     amount_val = row.get('amount', row.get('Tutar', row.get('total', 0)))
     try:
         amount = float(str(amount_val).replace(',', '.'))
@@ -58,19 +56,17 @@ for index, row in combined_amazon.iterrows():
     type_str = str(row.get('type', row.get('Tür', row.get('event_type', '')))).lower()
     sku_str = str(row.get('seller-sku', row.get('Stok Kodu', row.get('sku', '')))).strip().upper()
     
-    # ESKİ KODUN ASIL FİLTRESİ: Sipariş ve Satışları yakala
+    # Sipariş ve Satışları yakalayan asıl filtre
     if 'order' in type_str or 'satış' in type_str or 'sipariş' in type_str:
         if amount > 0:
             total_revenue += amount
             
             # Ürünün bizim excel listesindeki maliyetini bul (SKU ile)
             if df_mst is not None:
-                # Excel'deki ilk sütun barkod/sku sütunundur mantığıyla esnek arama
                 sku_col_mst = df_mst.columns[0]
                 maliyet_row = df_mst[df_mst[sku_col_mst].astype(str).str.strip().str.upper() == sku_str]
                 
                 if not maliyet_row.empty:
-                    # 3. sütun maliyet sütunundur
                     cost_col_mst = df_mst.columns[2] if len(df_mst.columns) > 2 else df_mst.columns[-1]
                     val_cost = str(maliyet_row.iloc[0].get(cost_col_mst, 0)).replace(',', '.')
                     try:
@@ -80,7 +76,6 @@ for index, row in combined_amazon.iterrows():
         else:
             total_amazon_fees += abs(amount)
     else:
-        # Genel diğer kesintiler (Abonelik, iade kesintileri vs.)
         if amount < 0:
             total_amazon_fees += abs(amount)
 
@@ -88,7 +83,7 @@ for index, row in combined_amazon.iterrows():
 net_profit = total_revenue - total_amazon_fees - total_product_cost
 profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0.0
 
-# 📈 NET KÂR VE FİNANS ÖZET KUTULARI (ESKİ DÜZEN)
+# 📈 NET KÂR VE FİNANS ÖZET KUTULARI
 st.subheader("💰 Bu Dönemin Finansal Net Raporu")
 kp1, kp2, kp3, kp4 = st.columns(4)
 with kp1:
