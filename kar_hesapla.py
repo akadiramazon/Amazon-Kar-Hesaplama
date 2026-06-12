@@ -5,49 +5,50 @@ import plotly.express as px
 # 🌟 SAYFA AYARLARI VE GENİŞ EKRAN
 st.set_page_config(page_title="Amazon CEO Pro Dashboard", layout="wide")
 
-# 🎨 PREMIUM GÖRSEL TASARIM ENJEKSİYONU (SAF CSS)
+# 🎨 SADE VE KURUMSAL FİNANS TEMASI (SAF CSS)
 st.markdown("""
     <style>
-    /* Ana Sayfa Yazı Tipi ve Arka Plan Yumuşatması */
+    /* Global Font ve Arka Plan */
     html, body, [data-testid="stAppViewContainer"] {
-        font-family: 'Inter', sans-serif;
-        background-color: #f8f9fa;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #fafafa;
     }
     
-    /* KPI Kart Tasarımları kanka */
-    .kpi-card {
+    /* Minimalist ve Gölgeli KPI Kartları */
+    .kpi-container {
         background-color: #ffffff;
-        padding: 24px;
-        border-radius: 16px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
-        border-left: 5px solid #cccccc;
-        margin-bottom: 10px;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        border: 1px solid #eaeaea;
+        margin-bottom: 15px;
     }
-    .kpi-hakedis { border-left-color: #0288d1; background-color: #e1f5fe; }
-    .kpi-maliyet { border-left-color: #f57c00; background-color: #fff3e0; }
-    .kpi-kesinti { border-left-color: #d32f2f; background-color: #ffebee; }
-    .kpi-kar { border-left-color: #388e3c; background-color: #e8f5e9; }
+    .border-hakedis { border-top: 4px solid #1e88e5; }
+    .border-maliyet { border-top: 4px solid #fb8c00; }
+    .border-kesinti { border-top: 4px solid #e53935; }
+    .border-kar { border-top: 4px solid #43a047; }
+    .border-zarar { border-top: 4px solid #e53935; }
     
     .kpi-title {
-        font-size: 14px;
+        font-size: 13px;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #555555;
+        letter-spacing: 0.5px;
+        color: #666666;
         font-weight: 600;
-        margin-bottom: 8px;
+        margin-bottom: 6px;
     }
     .kpi-value {
-        font-size: 28px;
+        font-size: 26px;
         font-weight: 700;
-        color: #111111;
+        color: #222222;
     }
     
-    /* Tablo Konteyner Özelleştirmesi */
+    /* Tablo Çerçeve Düzenlemesi */
     [data-testid="stDataFrame"] {
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 5px;
         background-color: #ffffff;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        padding: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -245,17 +246,15 @@ try:
     total_mal_maliyeti = df_valid_actions['Toplam_Urun_Maliyeti'].sum()
     final_net_kar = toplam_payout - total_mal_maliyeti
 
-    # 🎨 HARİCİ KÜTÜPHANESİZ GÖZ ALICI SAF CSS ISI HARİTASI VE RENKLENDİRME MOTORU
-    def hakedis_renklendir(val):
-        return 'background-color: #e3f2fd; color: #0d47a1; font-weight: 500;' if val > 0 else ''
+    # ⭐ SADECE YAZI RENKLERİNİ DEĞİŞTİREN KURUMSAL FINANS STYLER MOTORU (Gözü yormaz!)
+    def hakedis_stil(val):
+        return 'color: #0d47a1; font-weight: 600;' if val > 0 else ''
 
-    def kar_ve_roi_renklendir(val):
-        if val > 500: # Çok yüksek kârlar derin yeşil kanka
-            return 'background-color: #c8e6c9; color: #1b5e20; font-weight: bold; border-radius: 4px;'
-        elif val > 0: # Orta kârlar hafif yeşil
-            return 'background-color: #e8f5e9; color: #2e7d32; font-weight: bold;'
-        elif val < 0: # Zararlar pastel kırmızı
-            return 'background-color: #ffebee; color: #c62828; font-weight: bold; border-radius: 4px;'
+    def kar_ve_roi_stil(val):
+        if val > 0:
+            return 'color: #2e7d32; font-weight: bold;' # Sadece yazı pastel yeşil
+        elif val < 0:
+            return 'color: #c62828; font-weight: bold;' # Sadece yazı pastel kırmızı
         return ''
 
     # 📑 SEKMELİ GÖSTERİM MERKEZİ
@@ -264,14 +263,14 @@ try:
     with sekme1:
         st.subheader("📊 Dönemsel Performans Özetiniz")
         
-        # 🎨 YENİ GÖRSEL KPI WIDGET TASARIMLARI
+        # 🎨 YENİ MİNİMALİST VE ŞIK KPI BLOKLARI kanka
         k1, k2, k3, k4 = st.columns(4)
-        k1.markdown(f'<div class="kpi-card kpi-hakedis"><div class="kpi-title">💰 Net Hak Ediş</div><div class="kpi-value">{toplam_payout:,.2f} TL</div></div>', unsafe_allow_html=True)
-        k2.markdown(f'<div class="kpi-card kpi-maliyet"><div class="kpi-title">📦 Mal Maliyeti</div><div class="kpi-value">{total_mal_maliyeti:,.2f} TL</div></div>', unsafe_allow_html=True)
-        k3.markdown(f'<div class="kpi-card kpi-kesinti"><div class="kpi-title">🧾 Amazon Kesintileri</div><div class="kpi-value">{abs(harici_gider_toplami):,.2f} TL</div></div>', unsafe_allow_html=True)
+        k1.markdown(f'<div class="kpi-container border-hakedis"><div class="kpi-title">💰 Net Hak Ediş</div><div class="kpi-value">{toplam_payout:,.2f} TL</div></div>', unsafe_allow_html=True)
+        k2.markdown(f'<div class="kpi-container border-maliyet"><div class="kpi-title">📦 Mal Maliyeti</div><div class="kpi-value">{total_mal_maliyeti:,.2f} TL</div></div>', unsafe_allow_html=True)
+        k3.markdown(f'<div class="kpi-container border-kesinti"><div class="kpi-title">🧾 Amazon Kesintileri</div><div class="kpi-value">{abs(harici_gider_toplami):,.2f} TL</div></div>', unsafe_allow_html=True)
         
-        kar_rengi = "kpi-kar" if final_net_kar >= 0 else "kpi-kesinti"
-        k4.markdown(f'<div class="kpi-card {kar_rengi}"><div class="kpi-title">🔥 Net Temiz Kâr</div><div class="kpi-value">{final_net_kar:,.2f} TL</div></div>', unsafe_allow_html=True)
+        kar_sinifi = "border-kar" if final_net_kar >= 0 else "border-zarar"
+        k4.markdown(f'<div class="kpi-container {kar_sinifi}"><div class="kpi-title">🔥 Net Temiz Kâr</div><div class="kpi-value">{final_net_kar:,.2f} TL</div></div>', unsafe_allow_html=True)
 
         if final_net_kar >= 0:
             st.success("🎉 Tebrikler kanka! Amazon lojistik tazminatları dahil dönemi kârla tamamladık.")
@@ -279,13 +278,13 @@ try:
             st.error("🚨 Bu dönem finansal giderler toplam cironun üzerine çıkmış durumda kanka.")
 
         st.markdown("---")
-        st.subheader("📋 %100 Renk Haritalı Kârlılık Raporu")
+        st.subheader("📋 Kurumsal Finans Raporu Tablosu")
         
-        # ⭐ SAF CSS ISI HARİTASI TABLO BAĞLANTISI (Asla hata vermez kanka)
+        # ⭐ Saf Yazı Renklendirmeli Premium Tablo Bağlantısı
         try:
-            styled_df = product_summary_show.style.map(kar_ve_roi_renklendir, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_renklendir, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
+            styled_df = product_summary_show.style.map(kar_ve_roi_stil, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).map(hakedis_stil, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
         except:
-            styled_df = product_summary_show.style.applymap(kar_ve_roi_renklendir, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).applymap(hakedis_renklendir, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
+            styled_df = product_summary_show.style.applymap(kar_ve_roi_stil, subset=["Net Temiz Kâr (TRY)", "ROI (%)", "Kâr Marjı (%)"]).applymap(hakedis_stil, subset=["Net Hak Ediş (TRY)"]).format(precision=2)
 
         st.dataframe(styled_df, use_container_width=True)
 
